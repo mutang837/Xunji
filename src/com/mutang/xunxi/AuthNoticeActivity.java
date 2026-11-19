@@ -13,7 +13,7 @@ import org.json.*;
 /** User-controlled browser and import of visible notices; never reads login fields. */
 public final class AuthNoticeActivity extends Activity {
     Store store;Store.Source source;WebView web;TextView location,help,diagnostic;Button capture,originButton,subpage,auto;FrameLayout frame;final Set<String> approved=new java.util.concurrent.CopyOnWriteArraySet<>();String pendingOrigin;
-    final ArrayList<WebView> windows=new ArrayList<>();String noticeTitle="";volatile boolean active=true;boolean showedBlocked=false;
+    final ArrayList<WebView> windows=new ArrayList<>();String noticeTitle="";volatile boolean active=true;boolean showedBlocked=false,located=false;
     @Override public void onCreate(Bundle state){
         super.onCreate(state);store=new Store(this);String id=getIntent().getStringExtra("source");
         for(Store.Source s:store.sources())if(s.id.equals(id)&&s.authenticated)source=s;
@@ -25,7 +25,7 @@ public final class AuthNoticeActivity extends Activity {
         capture=new Button(this);capture.setText("收录当前公告");capture.setOnClickListener(v->importVisible());bar.addView(capture);root.addView(bar);
         help=new TextView(this);help.setText((AuthUrl.cleartext(source.url)?"⚠ HTTP 未加密，请使用可信网络。\n":"")+(noticeTitle.isEmpty()?"进入公告列表后点击收录，支持表格公告。仅本机保存。":"请在列表中找到并点击「详情」：\n"+noticeTitle));root.addView(help);
         location=new TextView(this);location.setMaxLines(2);root.addView(location);
-        diagnostic=new TextView(this);diagnostic.setTextColor(0xffa64b32);diagnostic.setVisibility(View.GONE);root.addView(diagnostic);LinearLayout extras=new LinearLayout(this);originButton=new Button(this);originButton.setText("来源授权");originButton.setOnClickListener(v->manageOrigins());extras.addView(originButton);subpage=new Button(this);subpage.setText("打开公告子页");subpage.setOnClickListener(v->openSubpage());extras.addView(subpage);auto=new Button(this);auto.setText(source.authPage.isEmpty()?"自动订阅":"自动设置");auto.setOnClickListener(v->setupAuto());extras.addView(auto);root.addView(extras);
+        diagnostic=new TextView(this);diagnostic.setTextColor(0xffa64b32);diagnostic.setVisibility(View.GONE);root.addView(diagnostic);LinearLayout extras=new LinearLayout(this);originButton=new Button(this);originButton.setText("来源授权");originButton.setOnClickListener(v->manageOrigins());extras.addView(originButton);subpage=new Button(this);subpage.setText("打开公告子页");subpage.setOnClickListener(v->openSubpage());extras.addView(subpage);auto=new Button(this);auto.setText(source.authPage.isEmpty()?"自动订阅":"自动设置");auto.setOnClickListener(v->setupAuto());extras.addView(auto);root.addView(extras);if(!noticeTitle.isEmpty()){Button locate=new Button(this);locate.setText("定位此公告");locate.setOnClickListener(v->locateNotice(web,true));root.addView(locate);}
         frame=new FrameLayout(this);root.addView(frame,new LinearLayout.LayoutParams(-1,0,1));
         String start=getIntent().getStringExtra("startUrl");if(!trusted(start)||AuthUrl.hasSessionParameter(start))start=source.url;
         newWindow().loadUrl(start);
@@ -37,8 +37,8 @@ public final class AuthNoticeActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest r){String u=r.getUrl().toString();if("about:blank".equals(u))return false;if(!allowed(u)){reportBlocked(u);return true;}return false;}
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest r){String u=r.getUrl().toString();if(AuthUrl.cleartext(u)&&!allowed(u)){reportBlocked(u);return blocked();}return null;}
             @Override public void onPageStarted(WebView view,String u,android.graphics.Bitmap b){if(!"about:blank".equals(u)&&!allowed(u)){view.stopLoading();reportBlocked(u);return;}if(view==web){location.setText(displayUrl(u));capture.setEnabled(false);}}
-            @Override public void onPageFinished(WebView view,String u){if(view==web){location.setText(displayUrl(u));capture.setEnabled(trusted(u));}}
-            @Override public void doUpdateVisitedHistory(WebView view,String u,boolean reload){if(view==web){location.setText(displayUrl(u));capture.setEnabled(trusted(u));}}
+            @Override public void onPageFinished(WebView view,String u){if(view==web){location.setText(displayUrl(u));capture.setEnabled(trusted(u));if(!noticeTitle.isEmpty())scheduleLocate(view);}}
+            @Override public void doUpdateVisitedHistory(WebView view,String u,boolean reload){if(view==web){location.setText(displayUrl(u));capture.setEnabled(trusted(u));if(!noticeTitle.isEmpty())scheduleLocate(view);}}
             @Override public void onReceivedError(WebView view,WebResourceRequest r,WebResourceError e){if(view==web&&r.isForMainFrame())showError("页面加载失败："+e.getDescription());}
             @Override public void onReceivedHttpError(WebView view,WebResourceRequest r,WebResourceResponse e){if(view==web&&r.isForMainFrame())showError("网站返回 HTTP "+e.getStatusCode());}
         });
@@ -82,6 +82,8 @@ public final class AuthNoticeActivity extends Activity {
         current.evaluateJavascript(js,value->{if(!active||current!=web||!page.equals(web.getUrl()))return;try{Object raw=new JSONTokener(value).nextValue();if(!(raw instanceof String))return;JSONArray rows=new JSONArray((String)raw);LinkedHashSet<String> valid=new LinkedHashSet<>();for(int i=0;i<rows.length();i++){String uri=AuthUrl.normalize(rows.optString(i));if(uri!=null&&trusted(uri)&&AuthUrl.stableList(uri)!=null&&!uri.equals(page))valid.add(uri);}String[] urls=valid.toArray(new String[0]);if(urls.length==0){Toast.makeText(this,"没有发现可打开的已授权子页面。请确认公告已加载、来源已授权。",Toast.LENGTH_LONG).show();return;}String[] labels=new String[urls.length];for(int j=0;j<urls.length;j++)labels[j]=displayUrl(urls[j]);new AlertDialog.Builder(this).setTitle("打开公告子页面").setItems(labels,(d,i)->{if(windows.size()<5&&trusted(urls[i]))newWindow().loadUrl(urls[i]);else Toast.makeText(this,"请关闭其他子窗口后重试",Toast.LENGTH_SHORT).show();}).setNegativeButton("取消",null).show();}catch(Exception e){Toast.makeText(this,"无法识别子页面",Toast.LENGTH_SHORT).show();}});
     }
     static String displayUrl(String raw){try{java.net.URI u=java.net.URI.create(raw);return u.getScheme()+"://"+u.getRawAuthority()+u.getRawPath()+(u.getRawFragment()==null?"":"#"+u.getRawFragment().split("[?&]",2)[0]);}catch(Exception e){return "网页";}}
+    void scheduleLocate(WebView target){if(located||noticeTitle.isEmpty())return;target.postDelayed(()->{if(active&&web==target&&!located)locateNotice(target,false);},1200);target.postDelayed(()->{if(active&&web==target&&!located)locateNotice(target,false);},4000);}
+    void locateNotice(WebView target,boolean manual){if(target==null||!trusted(target.getUrl())||noticeTitle.isEmpty())return;String page=target.getUrl();target.evaluateJavascript(AuthNoticeParser.locate(noticeTitle),result->{if(!active||web!=target||!page.equals(target.getUrl()))return;if("\"found\"".equals(result)){located=true;help.setText("已定位该公告，请点击绿色框内的「详情」。\n"+noticeTitle);}else if(manual){Toast.makeText(this,"\"ambiguous\"".equals(result)?"有多条同名公告，请自行选择详情":"当前页未找到此标题，可能在其他分页。请翻页后再定位。",Toast.LENGTH_LONG).show();}});}
     void setupAuto(){
         if(!source.authPage.isEmpty()){new AlertDialog.Builder(this).setTitle("自动订阅已开启").setMessage("打开讯集时按更新间隔检查公告。可更换当前公告页，也可关闭。").setNegativeButton("关闭自动订阅",(d,w)->{store.setAuthPage(source.id,"");source.authPage="";auto.setText("自动订阅");}).setNeutralButton("取消",null).setPositiveButton("更换为当前页",(d,w)->chooseAutoPage()).show();}
         else chooseAutoPage();

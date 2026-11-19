@@ -11,8 +11,19 @@ import java.util.*;
 /** Fetch the site's own declared icon, then its favicon.ico; no third-party service. */
 final class SiteIcons {
     static File file(Context c,String id){if(id==null||!id.matches("[a-fA-F0-9-]{36}"))return null;File dir=new File(c.getFilesDir(),"site-icons");dir.mkdirs();return new File(dir,id+".png");}
-    static Bitmap load(Context c,String id){File f=file(c,id);return f!=null&&f.exists()?BitmapFactory.decodeFile(f.getAbsolutePath()):null;}
-    static void remove(Context c,String id){File f=file(c,id);if(f!=null)new AtomicFile(f).delete();}
+    static File customFile(Context c,String id){File f=file(c,id);return f==null?null:new File(f.getParentFile(),id+".custom.png");}
+    static boolean hasCustom(Context c,String id){File f=customFile(c,id);return f!=null&&f.isFile();}
+    static Bitmap load(Context c,String id){File custom=customFile(c,id);Bitmap bitmap=custom!=null&&custom.isFile()?BitmapFactory.decodeFile(custom.getAbsolutePath()):null;if(bitmap!=null)return bitmap;File f=file(c,id);return f!=null&&f.exists()?BitmapFactory.decodeFile(f.getAbsolutePath()):null;}
+    static void resetCustom(Context c,String id){File f=customFile(c,id);if(f!=null)new AtomicFile(f).delete();}
+    static void remove(Context c,String id){File f=file(c,id);if(f!=null)new AtomicFile(f).delete();resetCustom(c,id);}
+    static void saveCustom(Context c,String id,android.net.Uri uri)throws IOException{
+        File target=customFile(c,id);if(target==null)throw new IOException("订阅已失效");byte[] bytes;
+        try(InputStream in=c.getContentResolver().openInputStream(uri);ByteArrayOutputStream out=new ByteArrayOutputStream()){
+            if(in==null)throw new IOException("无法打开所选图片");byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1){if(out.size()+n>12*1024*1024)throw new IOException("图片太大，请使用 12MB 以内的图片");out.write(buffer,0,n);}bytes=out.toByteArray();
+        }
+        Bitmap b=decode(bytes,false);if(b==null)throw new IOException("无法识别图片，请选择 JPG、PNG 或 WebP");
+        AtomicFile atomic=new AtomicFile(target);FileOutputStream out=null;try{out=atomic.startWrite();if(!b.compress(Bitmap.CompressFormat.PNG,100,out))throw new IOException("图片保存失败");atomic.finishWrite(out);out=null;}catch(Exception e){if(out!=null)atomic.failWrite(out);throw new IOException("图片保存失败",e);}finally{b.recycle();}
+    }
     static boolean exists(Context c,String id){File f=file(c,id);return f!=null&&f.isFile();}
     static void fetch(Context c,String id,List<String> icons){if(exists(c,id))return;List<String> candidates=new ArrayList<>();for(String u:icons){if(candidates.size()<3)candidates.add(u);}if(icons.size()>3&&!candidates.contains(icons.get(icons.size()-1)))candidates.add(icons.get(icons.size()-1));for(String url:candidates){if(Thread.currentThread().isInterrupted())return;try{
         byte[] bytes=Jsoup.connect(url).userAgent("Xunji/0.2 PersonalFeed").timeout(5500).maxBodySize(512*1024).ignoreContentType(true).followRedirects(true).execute().bodyAsBytes();

@@ -15,7 +15,8 @@ public final class UpdateInstallReceiver extends BroadcastReceiver {
             Toast.makeText(context,"讯集更新安装成功",Toast.LENGTH_LONG).show();
         }else{
             String detail=intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
-            Toast.makeText(context,"更新未安装"+(detail==null?"":": "+detail),Toast.LENGTH_LONG).show();
+            boolean aborted=status==PackageInstaller.STATUS_FAILURE_ABORTED;
+            Toast.makeText(context,aborted?"系统已取消安装：请确认安装及相关系统授权后重试。":("更新未安装"+(detail==null?"":": "+detail)),Toast.LENGTH_LONG).show();
         }
     }
 }
