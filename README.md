@@ -1,2 +1,38 @@
-# Xunji
-讯集：轻量 Android 网站公告与 RSS 信息聚合应用
+# 讯集 0.2.0
+
+极简 Android 本地网站聚合应用。无账号、无云服务器，所有订阅和文章记录保存于手机。支持 Android 8.0 及以上。
+
+## 使用
+
+1. 打开应用，点击添加网站，输入**具体公告列表或 RSS/Atom 地址**，名称留空时自动读取网站元数据或标题；图标自动获取，无法获取时显示文字头像。
+2. 首次会导入首页/订阅源上的已有公告（不发送大量历史通知）。后续可以在信息流浏览，点击卡片看原文。
+3. 默认每小时自动检查，设置中可调整为 15、30 分钟、1、3、6 小时。开启系统通知权限才能收到通知。
+4. 后台检查时间由 Android 调度，省电、系统后台限制、强行停止应用、断网可能推迟或暂停更新。可手动刷新。
+5. 信息流左上角打开“我的关注”侧边栏，选择全部信息或某个网站，查看该来源的未读数及独立信息流。公开版默认没有预置订阅；升级时保留设备上已有的数据与设置。
+
+## 范围
+
+适合公开且无需登录的静态公告列表或 RSS/Atom。涉及 JavaScript 渲染、验证码、登录或不规则网页结构的来源可能抓取不到或误识别。建议检查订阅状态并在首次添加后验证抓取内容；不要把它作为考试重要截止时间的唯一信息来源。不会绕过访问限制。每次最多读取一个列表页上的 70 条信息，最多订阅 30 个来源。
+
+## 构建
+
+需要 JDK 17+、Android SDK platform 35、build-tools 35.0.0、zip、curl 和 sha256sum。构建脚本会自动下载并校验固定版本的 Jsoup 依赖。示例：
+
+```bash
+export ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
+export BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+bash build.sh
+```
+
+APK 产物为 `out/Xunji-0.2.0.apk`。项目使用原生 Android Java UI、Jsoup 1.18.3（MIT License）和 JobScheduler。
+
+**签名说明：** 仓库不包含原始 `local-dev.keystore` 或其他签名密钥。若需要覆盖安装之前的版本，请将自己安全备份的原始 `local-dev.keystore` 放在项目根目录；否则构建会生成新的本地开发签名，不能直接覆盖旧签名的安装包。正式发布应采用独立安全的签名方案。
+
+## 解析器测试
+
+```bash
+bash fetch-deps.sh
+mkdir -p /tmp/xunji-test
+javac -encoding UTF-8 -cp lib/jsoup.jar -d /tmp/xunji-test src/com/mutang/xunxi/Collector.java tests/CollectorTest.java
+java -cp /tmp/xunji-test:lib/jsoup.jar com.mutang.xunxi.CollectorTest
+```

@@ -1,0 +1,14 @@
+# APK signing keys must remain private.
+*.keystore
+*.jks
+*.p12
+local.properties
+
+# Downloaded dependency and generated build files.
+/lib/*.jar
+/out/
+/build/
+*.apk
+*.class
+.idea/
+.gradle/
