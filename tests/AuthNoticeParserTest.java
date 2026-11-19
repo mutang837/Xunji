@@ -1,0 +1,20 @@
+package com.mutang.xunxi;
+import org.json.*;
+import java.util.*;
+public final class AuthNoticeParserTest {
+    static void check(boolean yes,String name){if(!yes)throw new AssertionError(name);System.out.println("PASS "+name);}
+    public static void main(String[] args)throws Exception{
+        String list="http://portal.test:1009/jwapp#/notice";
+        JSONArray rows=new JSONArray().put(new JSONObject().put("title","学生选课手册新").put("row",true).put("url",""))
+            .put(new JSONObject().put("title","关于大学生安全教育的通知").put("row",true).put("url","javascript:;"))
+            .put(new JSONObject().put("title","学生选课手册新").put("row",true).put("url",""))
+            .put(new JSONObject().put("title","考试通知").put("row",false).put("url","http://portal.test:1009/jwapp#/notice/23"))
+            .put(new JSONObject().put("title","退出登录").put("row",true).put("url",""))
+            .put(new JSONObject().put("title","公告通知").put("row",false).put("url","http://other.test/notice"));
+        List<Collector.Item> items=AuthNoticeParser.parse(rows,list);
+        check(items.size()==3,"Visible table rows and direct notice links are collected; navigation and duplicates rejected");
+        check(items.get(0).url.equals(list)&&items.get(1).url.equals(list)&&!items.get(0).noticeKey.equals(items.get(1).noticeKey),"Multiple titles sharing one list address have independent stable identities");
+        check(items.get(2).url.endsWith("#/notice/23")&&items.get(2).noticeKey.isEmpty(),"Real detail URL is preserved");
+        check(AuthNoticeParser.parse(rows,list+"?token=example").isEmpty(),"Session parameter is not saved as a list URL");
+    }
+}

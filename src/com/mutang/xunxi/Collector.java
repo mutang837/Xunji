@@ -19,9 +19,10 @@ public final class Collector {
     static final Pattern ARTICLE = Pattern.compile("(?i)(?:/info/|/content/|/article/|/detail/|/notice/|/news/|/ART/|/art/|/t20\\d{6}_|/20\\d{2}/|/\\d{4,}\\.(?:html?|shtml|aspx)|/\\d{4,}/|_[0-9]{5,}|/[a-z]\\d{5,}\\.html)");
     static final Pattern NAV = Pattern.compile("^(首页|网站首页|学校首页|更多[>»…]*|了解更多|查看详情|上一页|下一页|末页|尾页|返回|登录|注册|联系我们|网站地图|通知公告|招生信息|新闻动态|信息公开|网站导航|列表|新闻|公告|全部|[0-9]+|[.]{3})$");
     public static final class Item {
-        public final String title, url, summary; public final long date;public final boolean shortPost;
+        public final String title, url, summary, noticeKey; public final long date;public final boolean shortPost;
         Item(String title,String url,String summary,long date){this(title,url,summary,date,false);}
-        Item(String title,String url,String summary,long date,boolean shortPost){this.title=title;this.url=url;this.summary=summary;this.date=date;this.shortPost=shortPost;}
+        Item(String title,String url,String summary,long date,boolean shortPost){this(title,url,summary,date,shortPost,"");}
+        Item(String title,String url,String summary,long date,boolean shortPost,String noticeKey){this.title=title;this.url=url;this.summary=summary;this.date=date;this.shortPost=shortPost;this.noticeKey=noticeKey;}
     }
     public static final class Result {
         public final String name; public final List<Item> items; public final List<String> icons;
