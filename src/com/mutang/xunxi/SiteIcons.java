@@ -16,13 +16,10 @@ final class SiteIcons {
     static Bitmap load(Context c,String id){File custom=customFile(c,id);Bitmap bitmap=custom!=null&&custom.isFile()?BitmapFactory.decodeFile(custom.getAbsolutePath()):null;if(bitmap!=null)return bitmap;File f=file(c,id);return f!=null&&f.exists()?BitmapFactory.decodeFile(f.getAbsolutePath()):null;}
     static void resetCustom(Context c,String id){File f=customFile(c,id);if(f!=null)new AtomicFile(f).delete();}
     static void remove(Context c,String id){File f=file(c,id);if(f!=null)new AtomicFile(f).delete();resetCustom(c,id);}
-    static void saveCustom(Context c,String id,android.net.Uri uri)throws IOException{
-        File target=customFile(c,id);if(target==null)throw new IOException("订阅已失效");byte[] bytes;
-        try(InputStream in=c.getContentResolver().openInputStream(uri);ByteArrayOutputStream out=new ByteArrayOutputStream()){
-            if(in==null)throw new IOException("无法打开所选图片");byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1){if(out.size()+n>12*1024*1024)throw new IOException("图片太大，请使用 12MB 以内的图片");out.write(buffer,0,n);}bytes=out.toByteArray();
-        }
-        Bitmap b=decode(bytes,false);if(b==null)throw new IOException("无法识别图片，请选择 JPG、PNG 或 WebP");
-        AtomicFile atomic=new AtomicFile(target);FileOutputStream out=null;try{out=atomic.startWrite();if(!b.compress(Bitmap.CompressFormat.PNG,100,out))throw new IOException("图片保存失败");atomic.finishWrite(out);out=null;}catch(Exception e){if(out!=null)atomic.failWrite(out);throw new IOException("图片保存失败",e);}finally{b.recycle();}
+    static void saveCropped(Context c,String id,Bitmap b)throws IOException{
+        File target=customFile(c,id);if(target==null)throw new IOException("订阅已失效");
+        if(b==null||b.getWidth()!=256||b.getHeight()!=256)throw new IOException("请先裁剪图片");
+        AtomicFile atomic=new AtomicFile(target);FileOutputStream out=null;try{out=atomic.startWrite();if(!b.compress(Bitmap.CompressFormat.PNG,100,out))throw new IOException("图片保存失败");atomic.finishWrite(out);out=null;}catch(Exception e){if(out!=null)atomic.failWrite(out);throw new IOException("图片保存失败",e);}
     }
     static boolean exists(Context c,String id){File f=file(c,id);return f!=null&&f.isFile();}
     static void fetch(Context c,String id,List<String> icons){if(exists(c,id))return;List<String> candidates=new ArrayList<>();for(String u:icons){if(candidates.size()<3)candidates.add(u);}if(icons.size()>3&&!candidates.contains(icons.get(icons.size()-1)))candidates.add(icons.get(icons.size()-1));for(String url:candidates){if(Thread.currentThread().isInterrupted())return;try{

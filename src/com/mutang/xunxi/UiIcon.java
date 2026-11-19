@@ -24,6 +24,8 @@ final class UiIcon extends View {
             case "back":canvas.drawLine(14.5f,5,7.5f,12,p);canvas.drawLine(7.5f,12,14.5f,19,p);break;
             case "next":canvas.drawLine(9,6,15,12,p);canvas.drawLine(15,12,9,18,p);break;
             case "external":canvas.drawLine(7,17,17,7,p);canvas.drawLine(10,7,17,7,p);canvas.drawLine(17,7,17,14,p);break;
+            case "image":canvas.drawRoundRect(3,4,21,20,3,3,p);canvas.drawCircle(8,9,1.5f,p);canvas.drawLine(3,17,9,12,p);canvas.drawLine(9,12,13,16,p);canvas.drawLine(13,16,17,11,p);canvas.drawLine(17,11,21,15,p);break;
+            case "trash":canvas.drawLine(4,6,20,6,p);canvas.drawLine(9,6,9,3,p);canvas.drawLine(9,3,15,3,p);canvas.drawLine(15,3,15,6,p);canvas.drawRoundRect(6,6,18,21,2,2,p);canvas.drawLine(10,10,10,17,p);canvas.drawLine(14,10,14,17,p);break;
             case "check":canvas.drawLine(5,12,10,17,p);canvas.drawLine(10,17,19,7,p);break;
             case "close":canvas.drawLine(6,6,18,18,p);canvas.drawLine(18,6,6,18,p);break;
             default:canvas.drawRoundRect(5,5,19,19,4,4,p);break;

@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.mutang.xunxi" android:versionCode="12" android:versionName="0.6.6">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.mutang.xunxi" android:versionCode="13" android:versionName="0.6.7">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -16,6 +16,7 @@
         <activity android:name=".PdfActivity" android:exported="false" />
 
         <activity android:name=".ReaderActivity" android:exported="false" />
+        <activity android:name=".IconCropActivity" android:exported="false" />
         <provider android:name=".UpdateProvider" android:authorities="com.mutang.xunxi.updates" android:exported="false" android:grantUriPermissions="true" />
         <receiver android:name=".UpdateInstallReceiver" android:exported="false" />
     </application>

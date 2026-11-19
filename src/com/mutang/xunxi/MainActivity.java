@@ -18,7 +18,7 @@ import java.util.*;
 public class MainActivity extends Activity {
     static final int BG=0xfff5f7f8, CARD=0xffffffff, TEXT=0xff182830, MUTED=0xff697981, GREEN=0xff126e65, PALE=0xffe3f2ef, LINE=0xffe7ecee;
     Store store; AppUpdater updater; CloudSyncPanel cloud; LinearLayout root, top, page, nav; ScrollView scroll; FrameLayout shell, drawer; ScrollView drawerScroll;
-    final Map<String,Bitmap> icons=new HashMap<>(); String selectedSource=null,iconTarget;static final int PICK_ICON=105;
+    final Map<String,Bitmap> icons=new HashMap<>(); String selectedSource=null,iconTarget;static final int PICK_ICON=105,CROP_ICON=106;
     int tab=0; boolean unreadOnly=false, lastRunning=false; long revision=-1; float downY;
     Handler handler=new Handler(Looper.getMainLooper());
     final Runnable poll=new Runnable(){public void run(){boolean r=RefreshJob.running.get();if(store.revision()!=revision||r!=lastRunning){render(true);}handler.postDelayed(this,1200);}};
@@ -108,7 +108,31 @@ public class MainActivity extends Activity {
             LinearLayout buttons=row();buttons.addView(action("检查",false,()->refresh(s.id)),new LinearLayout.LayoutParams(0,-2,1));View sp=new View(this);buttons.addView(sp,new LinearLayout.LayoutParams(d(7),1));buttons.addView(action("网页",false,()->open(s.url)),new LinearLayout.LayoutParams(0,-2,1));View sp2=new View(this);buttons.addView(sp2,new LinearLayout.LayoutParams(d(7),1));buttons.addView(action("更多",false,()->sourceMenu(s)),new LinearLayout.LayoutParams(0,-2,1));add(c,buttons);add(page,c);gap(page,11);
         }
     }
-    void sourceMenu(Store.Source s){new AlertDialog.Builder(this).setTitle(s.name).setItems(new String[]{"查看信息流","自定义网站图标","取消订阅"},(dialog,which)->{if(which==0)selectSource(s.id);else if(which==1)iconDialog(s.id);else new AlertDialog.Builder(this).setTitle("取消订阅？").setMessage("将删除“"+s.name+"”及其已收录消息。").setNegativeButton("取消",null).setPositiveButton("删除",(d,w)->{store.delete(s.id);SiteIcons.remove(this,s.id);icons.remove(s.id);RefreshJob.schedule(this,true);render(false);}).show();}).setNegativeButton("关闭",null).show();}
+    final class MenuSheet {
+        final Dialog dialog=new Dialog(MainActivity.this);
+        final LinearLayout content=column();
+        MenuSheet(String title,String sub,Store.Source source){
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);LinearLayout outer=column();pad(outer,10,0,10,10);content.setBackground(shape(CARD,28));pad(content,20,10,20,16);outer.addView(content,new LinearLayout.LayoutParams(-1,-2));dialog.setContentView(outer);dialog.setCanceledOnTouchOutside(true);
+            View handle=new View(MainActivity.this);handle.setBackground(shape(0xffd3dddf,4));LinearLayout.LayoutParams h=new LinearLayout.LayoutParams(d(38),d(4));h.gravity=Gravity.CENTER;content.addView(handle,h);gap(content,18);
+            LinearLayout header=row();if(source!=null){View icon=avatar(source.id,source.name,18);header.addView(icon,new LinearLayout.LayoutParams(d(51),d(51)));View sp=new View(MainActivity.this);header.addView(sp,new LinearLayout.LayoutParams(d(13),1));}
+            LinearLayout words=column();TextView heading=text(title,20,TEXT,true);heading.setMaxLines(2);heading.setEllipsize(android.text.TextUtils.TruncateAt.END);add(words,heading);if(sub!=null&&!sub.isEmpty()){gap(words,5);TextView desc=text(sub,12,MUTED,false);desc.setMaxLines(2);desc.setEllipsize(android.text.TextUtils.TruncateAt.END);add(words,desc);}header.addView(words,new LinearLayout.LayoutParams(0,-2,1));header.addView(iconAction("close","关闭菜单",false,()->dialog.dismiss()),new LinearLayout.LayoutParams(d(38),d(38)));add(content,header);gap(content,17);
+        }
+        void option(String glyph,String title,String subtitle,boolean danger,Runnable click){
+            LinearLayout item=row();item.setBackground(touchShape(danger?0xfffff4f1:0xfff5f7f8,19));pad(item,12,12,12,12);FrameLayout tile=new FrameLayout(MainActivity.this);tile.setBackground(shape(danger?0xffffe4df:PALE,13));UiIcon icon=new UiIcon(MainActivity.this,glyph,danger?0xffb14c3c:GREEN,true);tile.addView(icon,new FrameLayout.LayoutParams(d(23),d(23),Gravity.CENTER));item.addView(tile,new LinearLayout.LayoutParams(d(43),d(43)));LinearLayout copy=column();pad(copy,12,0,8,0);add(copy,text(title,15,danger?0xffb14c3c:TEXT,true));gap(copy,5);add(copy,text(subtitle,11,MUTED,false));item.addView(copy,new LinearLayout.LayoutParams(0,-2,1));UiIcon arrow=new UiIcon(MainActivity.this,"next",danger?0xffb14c3c:MUTED,false);item.addView(arrow,new LinearLayout.LayoutParams(d(18),d(18)));item.setOnClickListener(v->{dialog.dismiss();click.run();});add(content,item);gap(content,8);
+        }
+        void show(){dialog.show();Window w=dialog.getWindow();if(w!=null){w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);w.setDimAmount(.42f);w.setGravity(Gravity.BOTTOM);w.setLayout(-1,-2);}}
+    }
+    void sourceMenu(Store.Source s){
+        MenuSheet menu=new MenuSheet(s.name,Collector.host(s.url),s);
+        menu.option("feed","查看信息流","查看这个网站已收录的消息",false,()->selectSource(s.id));
+        menu.option("image","自定义网站图标","选择相册图片，裁剪后保存",false,()->iconDialog(s.id));
+        menu.option("trash","取消订阅","移除网站和本地收录的消息",true,()->confirmDelete(s));menu.show();
+    }
+    void confirmDelete(Store.Source s){
+        MenuSheet menu=new MenuSheet("取消订阅？","将删除“"+s.name+"”及其已收录消息。",s);
+        menu.option("trash","确认取消订阅","此操作会删除此订阅的本地记录",true,()->{store.delete(s.id);SiteIcons.remove(this,s.id);icons.remove(s.id);RefreshJob.schedule(this,true);render(false);});
+        menu.option("close","保留订阅","不做任何更改",false,()->{});menu.show();
+    }
     void settings(){
         TextView section=text("信息更新",12,MUTED,true);pad(section,4,0,0,9);add(page,section);
         LinearLayout c=card(),period=row();LinearLayout label=column();add(label,text("自动检查频率",16,TEXT,true));gap(label,6);add(label,text("系统省电策略可能推迟后台任务",12,MUTED,false));period.addView(label,new LinearLayout.LayoutParams(0,-2,1));
@@ -125,8 +149,19 @@ public class MainActivity extends Activity {
     void refresh(String id){if(store.sources().isEmpty()){addSource();return;}if(RefreshJob.running.get()){Toast.makeText(this,"正在检查，请稍候",Toast.LENGTH_SHORT).show();return;}new Thread(()->{int result=RefreshJob.refresh(getApplicationContext(),id);runOnUiThread(()->{if(isFinishing()||isDestroyed())return;render(true);if(result>=0){int errors=0;for(Store.Source s:store.sources())if(!s.error.isEmpty())errors++;Toast.makeText(this,result>0?"收到 "+result+" 条新消息":errors>0?"检查完成，部分网站存在异常":"检查完成",Toast.LENGTH_SHORT).show();}});},"xunji-manual").start();handler.postDelayed(()->render(true),160);}
     void readPost(Store.Post post){Store.Source s=sourceById(post.source);Intent i=new Intent(this,ReaderActivity.class);i.putExtra("url",Collector.repairPlaceholder(post.url,s==null?null:s.url)).putExtra("title",post.title);startActivity(i);}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);state.putString("iconTarget",iconTarget);}
-    void iconDialog(String id){if(sourceById(id)==null)return;String[] choices=SiteIcons.hasCustom(this,id)?new String[]{"从相册选择图片","恢复网站自动图标"}:new String[]{"从相册选择图片"};new AlertDialog.Builder(this).setTitle("网站图标").setItems(choices,(dlg,which)->{if(which==1){SiteIcons.resetCustom(this,id);icons.remove(id);render(true);return;}iconTarget=id;Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*");try{startActivityForResult(pick,PICK_ICON);}catch(Exception e){iconTarget=null;Toast.makeText(this,"无法打开图片选择器",Toast.LENGTH_SHORT).show();}}).setNegativeButton("取消",null).show();}
-    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==AppUpdater.INSTALL_SETTINGS)updater.afterSettings();if(request==PICK_ICON){String id=iconTarget;iconTarget=null;if(result!=RESULT_OK||data==null||data.getData()==null||sourceById(id)==null)return;android.net.Uri uri=data.getData();new Thread(()->{try{SiteIcons.saveCustom(getApplicationContext(),id,uri);runOnUiThread(()->{if(!isFinishing()&&!isDestroyed()){icons.remove(id);render(true);Toast.makeText(this,"图标已更换",Toast.LENGTH_SHORT).show();}});}catch(Exception e){runOnUiThread(()->{if(!isFinishing())Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();});}},"xunji-icon").start();}}
+    void iconDialog(String id){
+        Store.Source s=sourceById(id);if(s==null)return;
+        MenuSheet menu=new MenuSheet("网站图标",s.name,s);
+        menu.option("image","从相册选择图片","进入正方形裁剪界面，再确认保存",false,()->pickIcon(id));
+        if(SiteIcons.hasCustom(this,id))menu.option("refresh","恢复自动图标","使用网站自己的图标或文字头像",false,()->{SiteIcons.resetCustom(this,id);icons.remove(id);render(true);});
+        menu.show();
+    }
+    void pickIcon(String id){iconTarget=id;Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*");try{startActivityForResult(pick,PICK_ICON);}catch(Exception e){iconTarget=null;Toast.makeText(this,"无法打开图片选择器",Toast.LENGTH_SHORT).show();}}
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);if(request==AppUpdater.INSTALL_SETTINGS)updater.afterSettings();
+        if(request==PICK_ICON){String id=iconTarget;iconTarget=null;if(result!=RESULT_OK||data==null||data.getData()==null||sourceById(id)==null)return;Intent edit=new Intent(this,IconCropActivity.class).setData(data.getData()).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).putExtra("source",id);try{startActivityForResult(edit,CROP_ICON);}catch(Exception e){Toast.makeText(this,"无法打开裁剪界面",Toast.LENGTH_SHORT).show();}}
+        if(request==CROP_ICON&&result==RESULT_OK&&data!=null){String id=data.getStringExtra("source");if(sourceById(id)!=null){icons.remove(id);render(true);Toast.makeText(this,"图标已更换",Toast.LENGTH_SHORT).show();}}
+    }
     void open(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception e){Toast.makeText(this,"未找到浏览器",Toast.LENGTH_SHORT).show();}}
     void permission(){if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){if(store.prefs.getBoolean("permissionAsked",false)&&!shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)){startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));}else{store.prefs.edit().putBoolean("permissionAsked",true).apply();requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},11);}}}
     String format(long date,String pattern){return new SimpleDateFormat(pattern,Locale.SIMPLIFIED_CHINESE).format(new Date(date));}
