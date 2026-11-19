@@ -9,6 +9,12 @@ public final class AuthUrlTest {
         check(notice.equals(AuthUrl.normalize(notice))&&AuthUrl.sameOrigin(origin,notice),"Same-origin hash notice links survive import");
         check(AuthUrl.allowedNavigation(origin,notice)&&AuthUrl.allowedNavigation(origin,"https://login.test/"),"Selected HTTP origin and normal HTTPS login navigation work");
         check(!AuthUrl.allowedNavigation(origin,"http://portal.test:1010/jwapp")&&!AuthUrl.allowedNavigation(origin,"http://other.test:1009/jwapp"),"Different HTTP ports and hosts rejected");
+        java.util.Set<String> approved=new java.util.HashSet<>();String sub="http://notices.test:8080/list";
+        check(!AuthUrl.allowedNavigation(origin,approved,sub)&&!AuthUrl.trustedOrigin(origin,approved,sub),"Extra HTTP notice origin blocked before explicit approval");
+        approved.add(AuthUrl.origin(sub));
+        check(AuthUrl.allowedNavigation(origin,approved,sub)&&AuthUrl.trustedOrigin(origin,approved,sub),"Exact approved HTTP notice origin can load and import");
+        check(!AuthUrl.allowedNavigation(origin,approved,"http://notices.test:8081/list")&&!AuthUrl.allowedNavigation(origin,approved,"http://other.test:8080/list"),"Approval does not extend to other ports or hosts");
+        approved.clear();check(!AuthUrl.allowedNavigation(origin,approved,sub),"Revocation restores the source restriction");
         check(!AuthUrl.allowedNavigation("https://portal.test/","http://portal.test/")&&!AuthUrl.allowedNavigation(origin,"file:///etc/passwd"),"HTTPS source cannot silently downgrade; non-web links rejected");
         check(AuthUrl.hasSessionParameter(origin+"?token=example")&&AuthUrl.hasSessionParameter("http://portal.test:1009/jwapp?ticket=example")&&!AuthUrl.hasSessionParameter(route),"Session-token links excluded; ordinary query parameters retained");
         check("http://portal.test:1009/jwapp".equals(Collector.normalize(origin)),"Public collector behavior remains unchanged");
