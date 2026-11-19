@@ -1,4 +1,4 @@
-# 讯集 0.6.10
+# 讯集 0.7.0
 
 现代、轻量的 Android 本地网站聚合应用。无账号、无云服务器，所有订阅和文章记录保存于手机。支持 Android 8.0 及以上。
 
@@ -30,7 +30,7 @@ export BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
 bash build.sh
 ```
 
-APK 产物为 `out/Xunji-0.6.10.apk`。项目使用原生 Android Java UI、Jsoup 1.18.3（MIT License）和 JobScheduler。
+APK 产物为 `out/Xunji-0.7.0.apk`。项目使用原生 Android Java UI、Jsoup 1.18.3（MIT License）和 JobScheduler。
 
 正式更新请在 GitHub Releases 发布形如 `v0.4.0` 的正式标签，并上传同版本的 `Xunji-0.4.0.apk`。必须使用已有安装包的同一原始签名密钥，并递增 versionCode；否则设备拒绝更新。
 
