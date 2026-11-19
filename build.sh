@@ -21,5 +21,5 @@ cp "$OUT/base.apk" "$OUT/unsigned.apk"
 if [[ ! -f local-dev.keystore ]]; then
     keytool -genkeypair -keystore local-dev.keystore -storepass android -alias xunji-dev -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Xunji Local Development"
 fi
-"$BUILD_TOOLS/apksigner" sign --ks local-dev.keystore --ks-key-alias xunji-dev --ks-pass pass:android --key-pass pass:android --out "$OUT/Xunji-0.6.5.apk" "$OUT/aligned.apk"
-"$BUILD_TOOLS/apksigner" verify --verbose "$OUT/Xunji-0.6.5.apk"
+"$BUILD_TOOLS/apksigner" sign --ks local-dev.keystore --ks-key-alias xunji-dev --ks-pass pass:android --key-pass pass:android --out "$OUT/Xunji-0.6.6.apk" "$OUT/aligned.apk"
+"$BUILD_TOOLS/apksigner" verify --verbose "$OUT/Xunji-0.6.6.apk"

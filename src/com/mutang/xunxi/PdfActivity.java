@@ -12,14 +12,14 @@ import java.net.*;
 /** Render a public PDF in a private temporary file without an external browser. */
 public final class PdfActivity extends Activity {
     volatile boolean active=true; File file; PdfRenderer renderer; ImageView image;
-    TextView label; Button prev,next; int page; Bitmap bitmap;
+    TextView label,prev,next; int page; Bitmap bitmap;
     @Override public void onCreate(Bundle state){
         super.onCreate(state); String url=getIntent().getStringExtra("url");
         if(!ArticleReader.webUrl(url)){finish();return;}
-        LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(12,24,12,12);setContentView(root);
-        LinearLayout bar=new LinearLayout(this);Button back=new Button(this);back.setText("返回");back.setOnClickListener(v->finish());bar.addView(back);prev=new Button(this);prev.setText("上一页");prev.setEnabled(false);prev.setOnClickListener(v->render(page-1));bar.addView(prev);
-        next=new Button(this);next.setText("下一页");next.setEnabled(false);next.setOnClickListener(v->render(page+1));bar.addView(next);root.addView(bar);
-        label=new TextView(this);label.setText("正在加载 PDF 文件…");root.addView(label);ScrollView scroll=new ScrollView(this);image=new ImageView(this);image.setAdjustViewBounds(true);scroll.addView(image,new ScrollView.LayoutParams(-1,-2));root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(MainActivity.BG);root.setOnApplyWindowInsetsListener((v,i)->{if(android.os.Build.VERSION.SDK_INT>=30){android.graphics.Insets p=i.getInsets(android.view.WindowInsets.Type.systemBars());v.setPadding(p.left+ReaderUi.dp(this,12),p.top+ReaderUi.dp(this,8),p.right+ReaderUi.dp(this,12),p.bottom+ReaderUi.dp(this,8));}else v.setPadding(i.getSystemWindowInsetLeft(),i.getSystemWindowInsetTop(),i.getSystemWindowInsetRight(),i.getSystemWindowInsetBottom());return i;});setContentView(root);
+        LinearLayout bar=new LinearLayout(this);TextView back=ReaderUi.button(this,"返回",false);back.setOnClickListener(v->finish());bar.addView(back,new LinearLayout.LayoutParams(0,-2,1));prev=ReaderUi.button(this,"上一页",false);prev.setEnabled(false);prev.setOnClickListener(v->render(page-1));LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(0,-2,1);pp.setMargins(ReaderUi.dp(this,8),0,ReaderUi.dp(this,8),0);bar.addView(prev,pp);
+        next=ReaderUi.button(this,"下一页",true);next.setEnabled(false);next.setOnClickListener(v->render(page+1));bar.addView(next,new LinearLayout.LayoutParams(0,-2,1));root.addView(bar);
+        label=new TextView(this);label.setTextColor(MainActivity.MUTED);label.setGravity(android.view.Gravity.CENTER);label.setPadding(0,ReaderUi.dp(this,12),0,ReaderUi.dp(this,12));label.setText("正在加载 PDF 文件…");root.addView(label);ScrollView scroll=new ScrollView(this);image=new ImageView(this);image.setAdjustViewBounds(true);scroll.addView(image,new ScrollView.LayoutParams(-1,-2));root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         new Thread(()->{File tmp=null;try{
             tmp=File.createTempFile("notice-",".pdf",getCacheDir());
             try{download(url,tmp);}catch(Exception e){tmp.delete();throw e;}
