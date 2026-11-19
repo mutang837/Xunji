@@ -19,6 +19,9 @@ public final class ArticleReaderTest {
         ArticleReader.Result embed=ArticleReader.extract("<div class='entry-content'><iframe src='/files/test.pdf'></iframe></div>",base);
         check(embed!=null&&embed.html.contains("test.pdf"),"Embedded PDF becomes a readable attachment link");
         check(ArticleReader.extract("<nav><a href='/'>返回</a></nav><body>请启用脚本</body>",base)==null,"Unrecognized page falls back to original");
+        String heading="全国普通高中学业水平合格性考试考前提示";
+        check(ArticleReader.extract("<html><head><title>"+heading+"</title></head><body><main><img src='/header-logo.png'><p>"+heading+"</p><p>"+heading+"</p><iframe src='/actual-body.html'></iframe></main></body></html>",base,heading)==null,"Duplicated title and masthead are not mistaken for article body");
+        check(ArticleReader.extract("<div class='article-content'><h1>"+heading+"</h1><p>请在规定日期参加考试，提前准备准考证和身份证。</p></div>",base,heading)!=null,"Article title plus genuine text stays readable");
         check(!ArticleReader.webUrl("file:///etc/passwd")&&!ArticleReader.webUrl("javascript:alert(1)")&&!ArticleReader.webUrl("https://name@example.cn"),"Reader rejects non-web URLs");
         if(args.length>0){try{String html=new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(args[0])),java.nio.charset.StandardCharsets.UTF_8);ArticleReader.Result fixture=ArticleReader.extract(html,base);check(fixture!=null&&fixture.html.contains(".pdf")&&fixture.html.contains(".jpg"),"Real captured CMS notice has document image and PDF link");}catch(java.io.IOException e){throw new AssertionError(e);}}
     }

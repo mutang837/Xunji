@@ -33,12 +33,18 @@ final class ArticleReader {
         }
     }
     static Result read(String url)throws Exception{
+        return read(url,"");
+    }
+    static Result read(String url,String expectedTitle)throws Exception{
         if(!webUrl(url)||url.matches("(?i).*\\.(pdf|docx?|xlsx?|pptx?|zip|rar)(?:[?#].*)?$"))throw new IllegalArgumentException("附件或非网页内容");
         org.jsoup.Connection.Response r=Jsoup.connect(url).userAgent("Xunji/0.4 Reader").timeout(18000).maxBodySize(4*1024*1024).followRedirects(true).ignoreContentType(true).execute();
         String type=r.contentType();if(type!=null&&!type.toLowerCase(Locale.ROOT).contains("html")&&!type.toLowerCase(Locale.ROOT).contains("text/plain"))throw new IllegalArgumentException("非 HTML 内容");
-        Result result=extract(Collector.decode(r),r.url().toExternalForm());if(result==null)throw new IllegalStateException("无法可靠识别正文");return result;
+        Result result=extract(Collector.decode(r),r.url().toExternalForm(),expectedTitle);if(result==null)throw new IllegalStateException("无法可靠识别正文");return result;
     }
     static Result extract(String html,String base){
+        return extract(html,base,"");
+    }
+    static Result extract(String html,String base,String expectedTitle){
         if(!webUrl(base))return null;
         Document doc=Jsoup.parse(html.startsWith("\uFEFF")?html.substring(1):html,base);
         // A comment form may also contain a CAPTCHA. Only gate the generic fallback;
@@ -47,6 +53,8 @@ final class ArticleReader {
         String title=doc.select("meta[property=og:title]").attr("content").trim();if(title.isEmpty()){Element h=doc.selectFirst("h1");title=h==null?doc.title():h.text();}
         preserveAttachments(doc,base);
         doc.select(JUNK).remove();
+        // Logos, mastheads and duplicated titles are not article content.
+        for(Element img:doc.select("img")){String attrs=(img.attr("src")+" "+img.attr("alt")+" "+img.attr("title")+" "+img.className()).toLowerCase(Locale.ROOT);if(attrs.matches(".*(?:logo|masthead|site-banner|header-banner|网站标志|网站标识).*"))img.remove();}
         Element picked=best(doc,CONTENT,true);if(picked==null&&(gated||!doc.select(CONTENT).isEmpty()))return null;if(picked==null)picked=best(doc,"article, main, [role=main], #content",false);if(picked==null)picked=best(doc,"body",false);
         if(picked==null)return null;
         Element content=picked.clone();content.select(JUNK).remove();
@@ -58,8 +66,12 @@ final class ArticleReader {
         Safelist safe=Safelist.relaxed().addTags("article","section","figure","figcaption","h1","h2","h3","h4","h5","h6","hr","mark","sub","sup","del","s","details","summary").addAttributes("img","alt","title").removeAttributes(":all","style","id","class").addProtocols("a","href","http","https").addProtocols("img","src","http","https");
         String clean=Jsoup.clean(content.html(),base,safe,new Document.OutputSettings().prettyPrint(false));
         Document checked=Jsoup.parseBodyFragment(clean);if(checked.body().text().trim().isEmpty()&&checked.select("img").isEmpty())return null;
+        String body=compact(checked.body().text()),t=compact(title),expected=compact(expectedTitle);
+        String stripped=body;if(!t.isEmpty()&&t.length()>=6)stripped=stripped.replace(t,"");if(!expected.isEmpty()&&expected.length()>=6)stripped=stripped.replace(expected,"");
+        if((t.length()>=6||expected.length()>=6)&&stripped.length()<8&&(body.contains(t)&&!t.isEmpty()||body.contains(expected)&&!expected.isEmpty())&&checked.select("a[href]").isEmpty()&&checked.select("img").size()<=1)return null;
         return new Result(title.trim(),clean,base);
     }
+    static String compact(String text){return text==null?"":text.replaceAll("[\\s\\p{Punct}，。！？：；、（）【】《》]+","");}
     static Element best(Document doc,String selectors,boolean explicit){Element picked=null;double best=-1;for(Element e:doc.select(selectors)){
         String text=e.text().trim();int len=text.length(),links=e.select("a[href]").text().length(),images=e.select("img").size();
         if(explicit){if(len<3&&images==0)continue;if(len>20&&links>len*.85&&images==0)continue;}

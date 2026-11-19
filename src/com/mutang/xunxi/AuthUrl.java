@@ -28,7 +28,20 @@ final class AuthUrl {
     }
     static boolean hasSessionParameter(String url){
         try{URI u=URI.create(url);String query=u.getRawQuery(),fragment=u.getRawFragment();String text=(query==null?"":query)+"&"+(fragment==null?"":fragment);
-            return text.matches("(?is).*(?:^|[?&#;])(?:access_token|refresh_token|token|ticket|sessionid|jsessionid|password|authcode|authorization|code)=.*")||u.getRawPath().toLowerCase(java.util.Locale.ROOT).contains(";jsessionid=");
+            return text.matches("(?is).*(?:^|[?&#;])(?:access_token|refresh_token|token|ticket|sessionid|jsessionid|password|authcode|authorization|code|_yhz)=.*")||u.getRawPath().toLowerCase(java.util.Locale.ROOT).contains(";jsessionid=");
         }catch(Exception e){return true;}
+    }
+    // Some portals append a transient user/session-related parameter to the rendered list.
+    // Never retain its value; a token-free URL must load normally using the existing browser session.
+    static String stableList(String raw){
+        try{String url=normalize(raw);if(url==null)return null;URI u=URI.create(url);String q=u.getRawQuery(),base=url.split("[?#]",2)[0];
+            java.util.List<String> kept=new java.util.ArrayList<>();if(q!=null)for(String p:q.split("&"))if(!p.toLowerCase(java.util.Locale.ROOT).startsWith("_yhz=")&&!p.isEmpty())kept.add(p);
+            String clean=base+(kept.isEmpty()?"":"?"+String.join("&",kept))+(u.getRawFragment()==null?"":"#"+u.getRawFragment());return hasSessionParameter(clean)?null:clean;
+        }catch(Exception e){return null;}
+    }
+    static boolean sameList(String configured,String actual){
+        try{String a=stableList(configured),b=stableList(actual);if(a==null||b==null||!sameOrigin(a,b))return false;URI x=URI.create(a),y=URI.create(b);if(!java.util.Objects.equals(x.getRawPath(),y.getRawPath())||!java.util.Objects.equals(x.getRawFragment(),y.getRawFragment()))return false;
+            java.util.Set<String> now=new java.util.HashSet<>(java.util.Arrays.asList((y.getRawQuery()==null?"":y.getRawQuery()).split("&")));for(String p:(x.getRawQuery()==null?"":x.getRawQuery()).split("&"))if(!p.isEmpty()&&!p.startsWith("av=")&&!now.contains(p))return false;return true;
+        }catch(Exception e){return false;}
     }
 }

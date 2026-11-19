@@ -17,6 +17,9 @@ public final class AuthUrlTest {
         approved.clear();check(!AuthUrl.allowedNavigation(origin,approved,sub),"Revocation restores the source restriction");
         check(!AuthUrl.allowedNavigation("https://portal.test/","http://portal.test/")&&!AuthUrl.allowedNavigation(origin,"file:///etc/passwd"),"HTTPS source cannot silently downgrade; non-web links rejected");
         check(AuthUrl.hasSessionParameter(origin+"?token=example")&&AuthUrl.hasSessionParameter("http://portal.test:1009/jwapp?ticket=example")&&!AuthUrl.hasSessionParameter(route),"Session-token links excluded; ordinary query parameters retained");
+        String dynamic="http://portal.test:1009/list?theme=blue&_yhz=example#/notices";
+        check(AuthUrl.hasSessionParameter(dynamic)&&"http://portal.test:1009/list?theme=blue#/notices".equals(AuthUrl.stableList(dynamic)),"User-specific parameters removed before saving automatic list");
+        check(AuthUrl.sameList(AuthUrl.stableList(dynamic),dynamic)&&!AuthUrl.sameList(AuthUrl.stableList(dynamic),"http://portal.test:1009/list?theme=blue#/other"),"Automatic checks remain scoped to the selected list route");
         check("http://portal.test:1009/jwapp".equals(Collector.normalize(origin)),"Public collector behavior remains unchanged");
     }
 }
