@@ -18,6 +18,15 @@ public final class ArticleReaderTest {
         check(school!=null&&school.html.contains("page1.jpg")&&school.html.contains("page2.jpg")&&school.html.contains("notice.pdf")&&!school.html.contains("<script"),"School PDF preview pages retained without executing scripts");
         ArticleReader.Result embed=ArticleReader.extract("<div class='entry-content'><iframe src='/files/test.pdf'></iframe></div>",base);
         check(embed!=null&&embed.html.contains("test.pdf"),"Embedded PDF becomes a readable attachment link");
+        String cms="<html><head><title>学生通知</title></head><body><nav><a href='/unrelated.pdf'>网站导航资料</a></nav><div class='main'><div id='vsb_content'><p>请查看附件中的详细名单。</p><p>&nbsp;</p><p><span>　&nbsp;</span><br></p><p style='text-align: right'>教务部门</p><p align='right'>2026年9月20日</p></div><ul class='attachlist'><li>附件【<a href='/system/_content/download.jsp?urltype=news.DownloadAttachUrl&amp;wbfileid=123'>公示名单.pdf</a>】已下载 37 次</li><li>附件【<a href='/files/form.docx' title='报名表.docx'>报名表.docx</a>】</li></ul></div><footer><a href='/old.pdf'>旧文件</a></footer></body></html>";
+        ArticleReader.Result attachment=ArticleReader.extract(cms,base,"学生通知");
+        check(attachment!=null&&attachment.attachments.size()==2,"CMS attachments outside the body retained, unrelated navigation and footer excluded");
+        check(attachment.attachments.get(0).pdf()&&attachment.attachments.get(0).url.contains("download.jsp")&&attachment.attachment(attachment.attachments.get(0).url)!=null,"PDF named link with dynamic download endpoint recognized");
+        check(attachment.html.contains("reader-files")&&attachment.html.contains("公示名单.pdf")&&attachment.html.contains("报名表.docx"),"Readable file cards appended to article");
+        check(!attachment.html.contains("&nbsp;")&&!attachment.html.contains("<p></p>")&&attachment.html.contains("reader-right"),"Empty CMS paragraphs removed and right-aligned signatures preserved");
+        ArticleReader.Result table=ArticleReader.extract("<div class='article-content'><p>考试时间</p><table><tr><td>时间</td><td>日期</td></tr></table></div>",base);
+        check(table!=null&&table.html.contains("reader-table")&&table.html.contains("<table"),"Tables preserve structure inside a responsive scroll wrapper");
+        check(ArticleReader.sameOrigin("https://example.cn/news/123.html","https://example.cn/system/_content/download.jsp")&&!ArticleReader.sameOrigin("https://example.cn/a","https://other.cn/b")&&!ArticleReader.sameOrigin("https://example.cn/a","http://example.cn/a"),"Attachment referer is scoped to the original origin");
         check(ArticleReader.extract("<nav><a href='/'>返回</a></nav><body>请启用脚本</body>",base)==null,"Unrecognized page falls back to original");
         String heading="全国普通高中学业水平合格性考试考前提示";
         check(ArticleReader.extract("<html><head><title>"+heading+"</title></head><body><main><img src='/header-logo.png'><p>"+heading+"</p><p>"+heading+"</p><iframe src='/actual-body.html'></iframe></main></body></html>",base,heading)==null,"Duplicated title and masthead are not mistaken for article body");

@@ -22,14 +22,14 @@ public final class PdfActivity extends Activity {
         label=new TextView(this);label.setTextColor(MainActivity.MUTED);label.setGravity(android.view.Gravity.CENTER);label.setPadding(0,ReaderUi.dp(this,12),0,ReaderUi.dp(this,12));label.setText("正在加载 PDF 文件…");root.addView(label);ScrollView scroll=new ScrollView(this);image=new ImageView(this);image.setAdjustViewBounds(true);scroll.addView(image,new ScrollView.LayoutParams(-1,-2));root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         new Thread(()->{File tmp=null;try{
             tmp=File.createTempFile("notice-",".pdf",getCacheDir());
-            try{download(url,tmp);}catch(Exception e){tmp.delete();throw e;}
+            try{download(url,tmp,getIntent().getStringExtra("referer"),24L*1024*1024);}catch(Exception e){tmp.delete();throw e;}
             final File loaded=tmp;runOnUiThread(()->{if(!active){loaded.delete();return;}file=loaded;try{ParcelFileDescriptor fd=ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);try{renderer=new PdfRenderer(fd);}catch(Exception e){fd.close();throw e;}render(0);}catch(Exception e){label.setText("无法预览 PDF（文件可能加密或格式不受支持）");}});
         }catch(Exception e){if(tmp!=null)tmp.delete();runOnUiThread(()->{if(active)label.setText("无法加载 PDF，请返回原文重试。");});}},"xunji-pdf").start();
     }
-    static void download(String url,File file)throws Exception{
-        for(int i=0;i<5;i++){if(!ArticleReader.webUrl(url))throw new IOException();HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setInstanceFollowRedirects(false);c.setConnectTimeout(15000);c.setReadTimeout(20000);
-            try{int status=c.getResponseCode();if(status>=300&&status<400){String location=c.getHeaderField("Location");if(location==null)throw new IOException();String u=URI.create(url).resolve(location).toString();if(url.startsWith("https:")&&!u.startsWith("https:"))throw new IOException();url=u;continue;}if(status!=200||c.getContentLengthLong()>24L*1024*1024)throw new IOException();
-                try(InputStream in=c.getInputStream();OutputStream out=new FileOutputStream(file)){byte[] b=new byte[16384];long total=0;int n;while((n=in.read(b))!=-1){total+=n;if(total>24L*1024*1024)throw new IOException();out.write(b,0,n);}}return;
+    static void download(String url,File file,String referer,long limit)throws Exception{
+        for(int i=0;i<5;i++){if(!ArticleReader.webUrl(url))throw new IOException();HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setInstanceFollowRedirects(false);c.setConnectTimeout(15000);c.setReadTimeout(20000);c.setRequestProperty("User-Agent","Xunji Android Reader");if(ArticleReader.sameOrigin(referer,url))c.setRequestProperty("Referer",referer);
+            try{int status=c.getResponseCode();if(status>=300&&status<400){String location=c.getHeaderField("Location");if(location==null)throw new IOException();String u=URI.create(url).resolve(location).toString();if(url.startsWith("https:")&&!u.startsWith("https:"))throw new IOException();url=u;continue;}if(status!=200||c.getContentLengthLong()>limit)throw new IOException();
+                try(InputStream in=c.getInputStream();OutputStream out=new FileOutputStream(file)){byte[] b=new byte[16384];long total=0;int n;while((n=in.read(b))!=-1){total+=n;if(total>limit)throw new IOException();out.write(b,0,n);}}return;
             }finally{c.disconnect();}
         }throw new IOException();
     }
