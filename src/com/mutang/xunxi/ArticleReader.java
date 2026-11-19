@@ -9,7 +9,7 @@ import java.util.Locale;
 
 /** Extract visible article text, links and images. Never execute scripts or bypass access controls. */
 final class ArticleReader {
-    static final String CONTENT=".shuoshuo-content, .entry-content, .post-content, .article-content, .article-body, .news-content, .news_content, .newsdetail, .newsDetail, .content-detail, .detail-content, .v_news_content, #vsb_content, #vsb_content_2, .TRS_Editor, .trs_editor, #zoom, #articleContent, #article-content, [itemprop=articleBody], .markdown-body";
+    static final String CONTENT=".shuoshuo-content, .entry-content, .post-content, .article-content, .article-body, .article-entry, .news-content, .news_content, .newsdetail, .newsDetail, .content-detail, .detail-content, .v_news_content, #vsb_content, #vsb_content_2, .TRS_Editor, .trs_editor, #zoom, #articleContent, #article-content, [itemprop=articleBody], .markdown-body, #article-container";
     static final String JUNK="script, style, noscript, iframe, object, embed, input, button, textarea, select, nav, aside, header, footer, .breadcrumb, .pagination, .comments, #comments, .comment, .comment-list, .related-posts, .post-navigation, .share, .social-share, .advertisement, .ads, .ad, [hidden]";
     static final class Result {final String title,html,url;Result(String t,String h,String u){title=t;html=h;url=u;}}
     static boolean webUrl(String url){try{URI u=URI.create(url);return u.getHost()!=null&&u.getUserInfo()==null&&("http".equalsIgnoreCase(u.getScheme())||"https".equalsIgnoreCase(u.getScheme()));}catch(Exception e){return false;}}

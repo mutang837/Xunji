@@ -86,7 +86,7 @@ public final class Collector {
                 try{url=URI.create(base).resolve(url).toString();}catch(Exception ignored){continue;}
                 String summary=e.select("description, summary, content").text();
                 String date=e.select("pubDate, published, updated, date").text();
-                put(items,title,url,Jsoup.parse(summary).text(),parseDate(date));
+                put(items,title,repairPlaceholder(url,base),Jsoup.parse(summary).text(),parseDate(date));
                 if(items.size()>=MAX_POSTS)break;
             }
             LinkedHashSet<String> icons=new LinkedHashSet<>();
@@ -160,6 +160,10 @@ public final class Collector {
         out.putIfAbsent(u,new Item(t,u,summary,date));
     }
     static String host(String url){try{return URI.create(url).getHost().toLowerCase(Locale.ROOT);}catch(Exception e){return "";}}
+    static boolean placeholderHost(String h){return h.matches("(?i)(?:www\\.)?example\\.(com|org|net)");}
+    // Some static blogs ship an Atom/RSS feed with the template's example.com origin.
+    // Fix only those reserved placeholder domains, never rewrite a legitimate external link.
+    static String repairPlaceholder(String article,String source){try{URI a=URI.create(article),s=URI.create(source);String h=host(article),origin=host(source);if(!placeholderHost(h)||placeholderHost(origin)||origin.isEmpty())return article;return URI.create(s.getScheme()+"://"+s.getRawAuthority()+(a.getRawPath().isEmpty()?"/":a.getRawPath())+(a.getRawQuery()==null?"":"?"+a.getRawQuery())).toASCIIString();}catch(Exception e){return article;}}
     static boolean sameSite(String a,String b){return a.equals(b)||a.equals("www."+b)||b.equals("www."+a);}
     static long parseDate(String s){
         if(s==null||s.isEmpty())return 0;

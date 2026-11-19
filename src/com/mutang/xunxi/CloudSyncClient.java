@@ -1,0 +1,20 @@
+package com.mutang.xunxi;
+
+import org.json.*;
+import java.net.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
+final class CloudSyncClient {
+    static final String NUTSTORE="https://dav.jianguoyun.com/dav/Xunji/";
+    static final int LIMIT=8*1024*1024;
+    static final class Config {final String url,user,password;Config(String u,String n,String p){url=folder(u);user=n;password=p;if(n.isEmpty()||p.isEmpty()||n.contains(":"))throw new IllegalArgumentException("请输入有效的账号与应用密码");}}
+    static String folder(String u){try{URI a=URI.create(u.trim());if(!"https".equalsIgnoreCase(a.getScheme())||a.getHost()==null||a.getUserInfo()!=null||a.getQuery()!=null||a.getFragment()!=null)throw new Exception();String s=a.toASCIIString();return s.endsWith("/")?s:s+"/";}catch(Exception e){throw new IllegalArgumentException("请输入 HTTPS WebDAV 文件夹地址（不要包含账号、参数或密码）");}}
+    static final class Remote {final JSONObject state;final String etag,lastModified;final boolean exists;Remote(JSONObject s,String e,String l,boolean x){state=s;etag=e;lastModified=l;exists=x;}}
+    static HttpURLConnection connect(Config cfg,String method)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(cfg.url+"Xunji-sync-v1.json").openConnection();c.setInstanceFollowRedirects(false);c.setConnectTimeout(15000);c.setReadTimeout(25000);c.setRequestMethod(method);c.setRequestProperty("Authorization","Basic "+Base64.getEncoder().encodeToString((cfg.user+":"+cfg.password).getBytes(StandardCharsets.UTF_8)));c.setRequestProperty("User-Agent","Xunji WebDAV Sync");c.setRequestProperty("Accept","application/json, */*");return c;}
+    static IOException status(int code){if(code==401||code==403)return new IOException("WebDAV 认证或权限失败，请检查账号、应用密码及文件夹写权限");if(code==404||code==409)return new IOException("WebDAV 文件夹不存在，请先建立 Xunji 文件夹并检查地址");if(code>=300&&code<400)return new IOException("服务器要求重定向，请直接填写最终的 HTTPS 文件夹地址");return new IOException("WebDAV 返回 HTTP "+code);}
+    static Remote get(Config cfg)throws Exception{HttpURLConnection c=connect(cfg,"GET");try{int code=c.getResponseCode();if(code==404)return new Remote(new JSONObject(),null,null,false);if(code!=200)throw status(code);String etag=c.getHeaderField("ETag"),modified=c.getHeaderField("Last-Modified");try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[16384];int n;while((n=in.read(buf))!=-1){if(out.size()+n>LIMIT)throw new IOException("云端同步文件超过大小限制");out.write(buf,0,n);}return new Remote(SyncMerge.unpack(out.toString("UTF-8")),etag,modified,true);}}finally{c.disconnect();}}
+    static boolean put(Config cfg,Remote remote,JSONObject merged)throws Exception{byte[] data=SyncMerge.envelope(merged).toString().getBytes(StandardCharsets.UTF_8);if(data.length>LIMIT)throw new IOException("同步数据超过大小限制");HttpURLConnection c=connect(cfg,"PUT");try{c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");if(!remote.exists)c.setRequestProperty("If-None-Match","*");else if(remote.etag!=null&&!remote.etag.isEmpty())c.setRequestProperty("If-Match",remote.etag);else if(remote.lastModified!=null)c.setRequestProperty("If-Unmodified-Since",remote.lastModified);else throw new IOException("此 WebDAV 服务没有提供版本校验，无法安全覆盖已有同步文件");c.setFixedLengthStreamingMode(data.length);try(OutputStream out=c.getOutputStream()){out.write(data);}int code=c.getResponseCode();if(code==412)return false;if(code!=200&&code!=201&&code!=204)throw status(code);return true;}finally{c.disconnect();}}
+    static void sync(Config cfg,Store store)throws Exception{for(int attempt=0;attempt<2;attempt++){Remote r=get(cfg);JSONObject merged; synchronized(Store.LOCK){merged=SyncMerge.merge(store.load(),r.state);}if(!put(cfg,r,merged))continue;synchronized(Store.LOCK){store.save(SyncMerge.merge(store.load(),merged));}store.repairStoredLinks();return;}throw new IOException("另一设备同时更新了云端数据，请稍后重试");}
+}

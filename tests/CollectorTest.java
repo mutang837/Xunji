@@ -3,6 +3,9 @@ package com.mutang.xunxi;
 public class CollectorTest {
     static void check(boolean test,String label){if(!test)throw new AssertionError(label);System.out.println("PASS "+label);}
     public static void main(String[] args)throws Exception{
+        Collector.Result placeholder=Collector.parse("<feed xmlns='http://www.w3.org/2005/Atom'><title>示例博客</title><entry><title>测试文章</title><link href='http://example.com/2025/08/24/%E6%B5%8B%E8%AF%95/'/><updated>2025-08-24T00:00:00Z</updated></entry></feed>","https://blog.test/atom.xml");
+        check(placeholder.items.size()==1&&placeholder.items.get(0).url.equals("https://blog.test/2025/08/24/%E6%B5%8B%E8%AF%95/"),"Placeholder Atom origin gets repaired without changing article path");
+        check(Collector.repairPlaceholder("https://real.external/post","https://blog.test/feed").equals("https://real.external/post"),"Legitimate external links are preserved");
         Collector.Result html=Collector.parse("<html><head><title>某高校研究生院</title></head><body><nav><a href='/index.html'>学校相关重要页面链接</a></nav><ul><li><a href='../info/1001/2345.htm'>硕士研究生招生简章及考试科目</a><span>2026-11-19</span></li><li><a href='../info/1001/2345.htm#top'>重复的公告链接</a></li><li><a href='../info/1001/2346.htm' title='关于研究生复试工作安排的通知'>关于复试...</a> 2026年11月18日</li><li><a href='https://other.test/notice/1234'>无关网站的长标题测试链接</a></li><li><a href='javascript:void(0)'>这是一条无效链接的文字</a></li><li><a href='list_2.htm'>下一页</a></li></ul></body></html>","https://grad.example.edu.cn/notice/list.htm");
         check(html.items.size()==2,"HTML notices, duplicate removal and navigation exclusion");
         check(html.items.get(0).url.equals("https://grad.example.edu.cn/info/1001/2345.htm"),"Relative links resolved");
