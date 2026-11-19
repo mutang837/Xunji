@@ -1,0 +1,32 @@
+package com.mutang.xunxi;
+
+import android.content.Context;
+import android.content.pm.*;
+import android.os.Build;
+import org.json.*;
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.*;
+
+/** Only accepts official release assets from this repository and APKs signed by the installed app's key. */
+final class UpdateClient {
+    static final String REPO="mutang837/Xunji", API="https://api.github.com/repos/"+REPO+"/releases/latest";
+    static final long MAX_SIZE=64L*1024*1024;
+    static final class Release{final String version,url,notes,digest;final long size;Release(String v,String u,String n,String d,long s){version=v;url=u;notes=n;digest=d;size=s;}}
+    interface Progress{void update(int percent);}
+    static int compare(String a,String b){String[] aa=version(a).split("\\."),bb=version(b).split("\\.");for(int i=0;i<3;i++){int c=Integer.compare(Integer.parseInt(aa[i]),Integer.parseInt(bb[i]));if(c!=0)return c;}return 0;}
+    static String version(String value){String v=value==null?"":value.trim();if(v.startsWith("v"))v=v.substring(1);if(!v.matches("[0-9]{1,5}\\.[0-9]{1,5}\\.[0-9]{1,5}"))throw new IllegalArgumentException("无法识别版本号");return v;}
+    static boolean trusted(String url){try{URI u=URI.create(url);String host=u.getHost();return "https".equalsIgnoreCase(u.getScheme())&&u.getUserInfo()==null&&(u.getPort()==-1||u.getPort()==443)&&("api.github.com".equals(host)||"github.com".equals(host)||"release-assets.githubusercontent.com".equals(host)||"objects.githubusercontent.com".equals(host)||"github-releases.githubusercontent.com".equals(host));}catch(Exception e){return false;}}
+    static HttpURLConnection connect(String url,String accept)throws IOException{for(int i=0;i<6;i++){if(!trusted(url))throw new IOException("更新地址不可信");HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setInstanceFollowRedirects(false);c.setConnectTimeout(15000);c.setReadTimeout(20000);c.setRequestProperty("User-Agent","Xunji Android Updater");c.setRequestProperty("Accept",accept);int code=c.getResponseCode();if(code>=300&&code<400){String location=c.getHeaderField("Location");c.disconnect();if(location==null)throw new IOException("更新服务器重定向异常");url=URI.create(url).resolve(location).toString();continue;}if(code!=200){c.disconnect();throw new IOException(code==404?"暂时没有可用的正式版本":"更新服务器返回 HTTP "+code);}return c;}throw new IOException("更新服务器重定向次数过多");}
+    static Release latest()throws Exception{HttpURLConnection c=connect(API,"application/vnd.github+json");try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(out.size()+n>1024*1024)throw new IOException("版本信息过大");out.write(buf,0,n);}return parse(out.toString("UTF-8"));}finally{c.disconnect();}}
+    static Release parse(String text)throws Exception{JSONObject j=new JSONObject(text);if(j.optBoolean("draft")||j.optBoolean("prerelease"))throw new IOException("没有正式更新");String v=version(j.getString("tag_name"));String name="Xunji-"+v+".apk";JSONArray assets=j.getJSONArray("assets");for(int i=0;i<assets.length();i++){JSONObject a=assets.getJSONObject(i);if(!name.equals(a.optString("name")))continue;String expected="https://github.com/"+REPO+"/releases/download/"+j.getString("tag_name")+"/"+name;String url=a.optString("browser_download_url"),digest=a.optString("digest","");long size=a.optLong("size",0);if(!expected.equals(url)||size<=0||size>MAX_SIZE)throw new IOException("正式安装包信息异常");if(!digest.isEmpty()&&!digest.equals("null")&&!digest.matches("sha256:[a-fA-F0-9]{64}"))throw new IOException("安装包校验信息无效");return new Release(v,url,j.optString("body",""),digest,size);}throw new IOException("最新版本没有可下载的安装包");}
+    static File apk(Context context){return new File(new File(context.getFilesDir(),"updates"),"latest.apk");}
+    static void download(Context context,Release r,Progress progress)throws Exception{File target=apk(context);if(!target.getParentFile().isDirectory()&&!target.getParentFile().mkdirs())throw new IOException("无法创建更新目录");File temp=new File(target.getParentFile(),"download.part.apk");HttpURLConnection c=connect(r.url,"application/octet-stream");MessageDigest hash=MessageDigest.getInstance("SHA-256");long total=0;try{try(InputStream in=c.getInputStream();FileOutputStream out=new FileOutputStream(temp)){byte[] buf=new byte[32768];int n,last=-1;while((n=in.read(buf))!=-1){total+=n;if(total>MAX_SIZE||total>r.size)throw new IOException("安装包大小异常");hash.update(buf,0,n);out.write(buf,0,n);int p=(int)(total*100/r.size);if(p!=last){progress.update(p);last=p;}}out.getFD().sync();}if(total!=r.size)throw new IOException("安装包下载不完整");String digest=r.digest;if(digest.startsWith("sha256:")&&!hex(hash.digest()).equalsIgnoreCase(digest.substring(7)))throw new IOException("安装包哈希值不匹配");verify(context,temp,r.version);if(target.exists()&&!target.delete())throw new IOException("无法替换旧更新文件");if(!temp.renameTo(target))throw new IOException("无法保存更新文件");}finally{c.disconnect();if(temp.exists())temp.delete();}}
+    static String hex(byte[] bytes){StringBuilder s=new StringBuilder();for(byte b:bytes)s.append(String.format(Locale.ROOT,"%02x",b&255));return s.toString();}
+    static long code(PackageInfo p){return Build.VERSION.SDK_INT>=28?p.getLongVersionCode():p.versionCode;}
+    static Signature[] certificates(PackageInfo p){if(Build.VERSION.SDK_INT>=28){return p.signingInfo==null?null:p.signingInfo.getApkContentsSigners();}return p.signatures;}
+    static boolean sameCertificates(Signature[] a,Signature[] b){if(a==null||b==null||a.length==0||a.length!=b.length)return false;Set<Signature> x=new HashSet<>(Arrays.asList(a));return x.equals(new HashSet<>(Arrays.asList(b)));}
+    static void verify(Context c,File file,String expected)throws Exception{PackageManager pm=c.getPackageManager();int flag=Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES;PackageInfo current=pm.getPackageInfo(c.getPackageName(),flag);PackageInfo next=pm.getPackageArchiveInfo(file.getAbsolutePath(),flag);if(next==null||!c.getPackageName().equals(next.packageName))throw new IOException("安装包不是讯集");if(!sameCertificates(certificates(current),certificates(next)))throw new IOException("安装包签名与当前应用不一致，已拒绝安装");if(code(next)<=code(current)||compare(next.versionName,current.versionName)<=0)throw new IOException("安装包不是更新版本");if(expected!=null&&!version(next.versionName).equals(expected))throw new IOException("安装包版本与发布信息不一致");}
+}
