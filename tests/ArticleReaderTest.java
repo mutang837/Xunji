@@ -14,7 +14,12 @@ public final class ArticleReaderTest {
         check(ArticleReader.extract("<div class='entry-content'><p>公开文章正文</p></div><form><input id='captcha'></form>",base)!=null,"Public article remains readable when comments require CAPTCHA");
         check(ArticleReader.extract("<form><div class='v_news_content'><p>实际通知文字</p></div></form>",base)!=null,"Article wrapped in a CMS form stays readable");
         check(ArticleReader.extract("<div class='v_news_content'><script>embedPdf()</script></div><div><img src='/unrelated-logo.png'></div>",base)==null,"Script-only attachment falls back instead of displaying unrelated page content");
+        ArticleReader.Result school=ArticleReader.extract("<div id='vsb_content'><p><script>var vsb_pdf_image_data = [\"/files/page1.jpg\",\"/files/page2.jpg\"];showVsbpdfIframe(\"/files/notice.pdf\",\"100%\")</script></p></div>",base);
+        check(school!=null&&school.html.contains("page1.jpg")&&school.html.contains("page2.jpg")&&school.html.contains("notice.pdf")&&!school.html.contains("<script"),"School PDF preview pages retained without executing scripts");
+        ArticleReader.Result embed=ArticleReader.extract("<div class='entry-content'><iframe src='/files/test.pdf'></iframe></div>",base);
+        check(embed!=null&&embed.html.contains("test.pdf"),"Embedded PDF becomes a readable attachment link");
         check(ArticleReader.extract("<nav><a href='/'>返回</a></nav><body>请启用脚本</body>",base)==null,"Unrecognized page falls back to original");
         check(!ArticleReader.webUrl("file:///etc/passwd")&&!ArticleReader.webUrl("javascript:alert(1)")&&!ArticleReader.webUrl("https://name@example.cn"),"Reader rejects non-web URLs");
+        if(args.length>0){try{String html=new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(args[0])),java.nio.charset.StandardCharsets.UTF_8);ArticleReader.Result fixture=ArticleReader.extract(html,base);check(fixture!=null&&fixture.html.contains(".pdf")&&fixture.html.contains(".jpg"),"Real captured CMS notice has document image and PDF link");}catch(java.io.IOException e){throw new AssertionError(e);}}
     }
 }

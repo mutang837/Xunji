@@ -14,5 +14,11 @@ public final class SyncMergeTest {
         JSONObject readded=SyncMerge.merge(deleted,state(source("new",blog,30),null));check(readded.getJSONArray("sources").length()==1,"Intentional re-subscribe after deletion works");
         JSONObject safe=SyncMerge.merge(new JSONObject(),a.put("password","do-not-sync").put("token","secret"));check(!safe.has("password")&&!safe.has("token"),"Credentials and unrelated preferences are excluded");
         check(SyncMerge.unpack(SyncMerge.envelope(merged).toString()).getJSONArray("posts").length()==1,"Versioned sync file round-trip");
+        JSONObject privateLocal=state(source("private","https://portal.test/",20).put("authenticated",true),post("private-post","private","https://portal.test/notice",false));
+        privateLocal.put("seen",new JSONObject().put("private",new JSONArray().put("https://portal.test/notice")));
+        JSONObject publicState=SyncMerge.partition(privateLocal,false);
+        check(!publicState.toString().contains("portal.test")&&publicState.getJSONArray("sources").length()==0,"Login-only notices and seen links never enter a cloud backup");
+        JSONObject restored=SyncMerge.restorePrivate(merged,privateLocal);
+        check(restored.getJSONArray("sources").length()==2&&restored.getJSONArray("posts").length()==2&&restored.getJSONObject("seen").has("private"),"Local authenticated subscriptions survive cloud merges");
     }
 }

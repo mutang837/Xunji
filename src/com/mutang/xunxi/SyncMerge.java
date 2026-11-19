@@ -9,6 +9,26 @@ final class SyncMerge {
     static JSONArray arr(JSONObject o,String k){JSONArray a=o.optJSONArray(k);return a==null?new JSONArray():a;}
     static JSONObject obj(JSONObject o,String k){JSONObject a=o.optJSONObject(k);return a==null?new JSONObject():a;}
     static String clip(String s,int n){return s.length()>n?s.substring(0,n):s;}
+    // Authenticated subscriptions, their posts and seen URLs never enter WebDAV.
+    static JSONObject partition(JSONObject state,boolean privatePart)throws JSONException{
+        JSONArray sources=new JSONArray(),posts=new JSONArray();JSONObject seen=new JSONObject(),tombs=new JSONObject();Set<String> ids=new HashSet<>(),privateUrls=new HashSet<>();
+        JSONArray originals=arr(state,"sources");for(int i=0;i<originals.length();i++){JSONObject s=originals.optJSONObject(i);if(s==null)continue;if(s.optBoolean("authenticated"))privateUrls.add(s.optString("url"));if(s.optBoolean("authenticated")==privatePart){sources.put(s);ids.add(s.optString("id"));}}
+        JSONArray records=arr(state,"posts");for(int i=0;i<records.length();i++){JSONObject p=records.optJSONObject(i);if(p!=null&&ids.contains(p.optString("source")))posts.put(p);}
+        JSONObject oldSeen=obj(state,"seen");for(String id:ids)if(oldSeen.has(id))seen.put(id,oldSeen.get(id));
+        if(!privatePart){JSONObject oldTombs=obj(state,"tombstones");for(Iterator<String> it=oldTombs.keys();it.hasNext();){String u=it.next();if(!privateUrls.contains(u))tombs.put(u,oldTombs.get(u));}}
+        return new JSONObject().put("sources",sources).put("posts",posts).put("seen",seen).put("tombstones",tombs);
+    }
+    static JSONObject restorePrivate(JSONObject publicState,JSONObject local)throws JSONException{
+        JSONObject priv=partition(local,true);JSONArray sources=arr(publicState,"sources"),posts=arr(publicState,"posts"),privateSources=arr(priv,"sources");JSONObject seen=obj(publicState,"seen");Set<String> urls=new HashSet<>(),ids=new HashSet<>();
+        for(int i=0;i<privateSources.length();i++){JSONObject s=privateSources.optJSONObject(i);urls.add(s.optString("url"));ids.add(s.optString("id"));}
+        JSONArray allSources=new JSONArray(),allPosts=new JSONArray();Set<String> keep=new HashSet<>();
+        for(int i=0;i<sources.length();i++){JSONObject s=sources.optJSONObject(i);if(!urls.contains(s.optString("url"))&&!ids.contains(s.optString("id"))){allSources.put(s);keep.add(s.optString("id"));}else seen.remove(s.optString("id"));}
+        for(int i=0;i<posts.length();i++){JSONObject p=posts.optJSONObject(i);if(keep.contains(p.optString("source")))allPosts.put(p);}
+        for(int i=0;i<privateSources.length();i++)allSources.put(privateSources.get(i));
+        JSONArray privatePosts=arr(priv,"posts");for(int i=0;i<privatePosts.length();i++)allPosts.put(privatePosts.get(i));
+        JSONObject privateSeen=obj(priv,"seen");for(Iterator<String> it=privateSeen.keys();it.hasNext();){String id=it.next();seen.put(id,privateSeen.get(id));}
+        return publicState.put("sources",allSources).put("posts",allPosts).put("seen",seen);
+    }
     static JSONObject envelope(JSONObject state)throws JSONException{return new JSONObject().put("format",FORMAT).put("state",state).put("updatedAt",System.currentTimeMillis());}
     static JSONObject unpack(String text)throws Exception{JSONObject o=new JSONObject(text);if(!FORMAT.equals(o.optString("format"))||o.optJSONObject("state")==null)throw new IllegalArgumentException("云端文件格式不是讯集同步数据");JSONObject state=o.getJSONObject("state");if(state.optJSONArray("sources")==null||state.optJSONArray("posts")==null)throw new IllegalArgumentException("云端数据不完整");return state;}
     static JSONObject cleanSource(JSONObject s,String url,String id)throws JSONException{return new JSONObject().put("id",id).put("url",url).put("name",clip(s.optString("name",Collector.host(url)),80)).put("autoName",s.optBoolean("autoName",true)).put("checked",s.optLong("checked")).put("error",clip(s.optString("error"),300)).put("count",s.optInt("count")).put("initialized",s.optBoolean("initialized")).put("shortPostsInitialized",s.optBoolean("shortPostsInitialized")).put("addedAt",s.optLong("addedAt"));}

@@ -6,6 +6,8 @@ import org.jsoup.nodes.Element;
 import org.jsoup.safety.Safelist;
 import java.net.URI;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Extract visible article text, links and images. Never execute scripts or bypass access controls. */
 final class ArticleReader {
@@ -13,6 +15,23 @@ final class ArticleReader {
     static final String JUNK="script, style, noscript, iframe, object, embed, input, button, textarea, select, nav, aside, header, footer, .breadcrumb, .pagination, .comments, #comments, .comment, .comment-list, .related-posts, .post-navigation, .share, .social-share, .advertisement, .ads, .ad, [hidden]";
     static final class Result {final String title,html,url;Result(String t,String h,String u){title=t;html=h;url=u;}}
     static boolean webUrl(String url){try{URI u=URI.create(url);return u.getHost()!=null&&u.getUserInfo()==null&&("http".equalsIgnoreCase(u.getScheme())||"https".equalsIgnoreCase(u.getScheme()));}catch(Exception e){return false;}}
+    static boolean pdfUrl(String url){return webUrl(url)&&url.matches("(?i).*\\.pdf(?:[?#].*)?$");}
+    static String resolve(String base,String path){try{String u=URI.create(base).resolve(path).toASCIIString();return webUrl(u)?u:"";}catch(Exception e){return "";}}
+    static void appendPdf(Element el,String url){if(pdfUrl(url)&&!el.select("a[href]").stream().anyMatch(a->url.equals(a.absUrl("href"))))el.appendElement("p").appendElement("a").attr("href",url).text("在应用内查看 PDF 文件");}
+    // Preserve document previews using literal values only; never execute page scripts.
+    static void preserveAttachments(Document doc,String base){
+        for(Element el:doc.select("iframe[src], embed[src], object[data]")){
+            String u=el.absUrl(el.hasAttr("src")?"src":"data");if(pdfUrl(u))appendPdf(el.parent(),u);
+        }
+        Pattern images=Pattern.compile("vsb_pdf_image_data\\s*=\\s*\\[([^\\]]{0,50000})\\]");
+        Pattern quote=Pattern.compile("[\"']([^\"'\\r\\n]{1,2048})[\"']");
+        Pattern pdf=Pattern.compile("showVsbpdfIframe\\s*\\(\\s*[\"']([^\"']+)[\"']");
+        for(Element script:doc.select(CONTENT+"").select("script")){
+            Element parent=script.parent();String body=script.data();Matcher pages=images.matcher(body);int count=0;
+            if(pages.find()){Matcher values=quote.matcher(pages.group(1));while(values.find()&&count<50){String u=resolve(base,values.group(1));if(u.matches("(?i).*\\.(jpg|jpeg|png|webp)(?:[?#].*)?$")&&Collector.host(base).equals(Collector.host(u))){parent.appendElement("p").appendElement("img").attr("src",u).attr("alt","文件第 "+(++count)+" 页");}}}
+            Matcher file=pdf.matcher(body);if(file.find())appendPdf(parent,resolve(base,file.group(1)));
+        }
+    }
     static Result read(String url)throws Exception{
         if(!webUrl(url)||url.matches("(?i).*\\.(pdf|docx?|xlsx?|pptx?|zip|rar)(?:[?#].*)?$"))throw new IllegalArgumentException("附件或非网页内容");
         org.jsoup.Connection.Response r=Jsoup.connect(url).userAgent("Xunji/0.4 Reader").timeout(18000).maxBodySize(4*1024*1024).followRedirects(true).ignoreContentType(true).execute();
@@ -26,6 +45,7 @@ final class ArticleReader {
         // a separately visible article body is safe to extract without interacting with the form.
         boolean gated=!doc.select("input[type=password], .g-recaptcha, .h-captcha, #captcha, #challenge-form").isEmpty();
         String title=doc.select("meta[property=og:title]").attr("content").trim();if(title.isEmpty()){Element h=doc.selectFirst("h1");title=h==null?doc.title():h.text();}
+        preserveAttachments(doc,base);
         doc.select(JUNK).remove();
         Element picked=best(doc,CONTENT,true);if(picked==null&&(gated||!doc.select(CONTENT).isEmpty()))return null;if(picked==null)picked=best(doc,"article, main, [role=main], #content",false);if(picked==null)picked=best(doc,"body",false);
         if(picked==null)return null;

@@ -27,7 +27,7 @@ public class RefreshJob extends JobService {
         ExecutorService pool=Executors.newFixedThreadPool(3);
         try{
             List<Callable<Void>> jobs=new ArrayList<>();
-            for(Store.Source src:store.sources())if(onlyId==null||onlyId.equals(src.id))jobs.add(()->{
+            for(Store.Source src:store.sources())if(!src.authenticated&&(onlyId==null||onlyId.equals(src.id)))jobs.add(()->{
                 try{Collector.Result r=Collector.collect(src.url);if(!Thread.currentThread().isInterrupted()){SiteIcons.fetch(context,src.id,r.icons);fresh.addAll(store.merge(src,r,r.items.isEmpty()?"未识别到公告；请添加具体的公告列表页或 RSS 地址":null));}}
                 catch(Exception e){if(!Thread.currentThread().isInterrupted())store.merge(src,null,error(e));}return null;});
             pool.invokeAll(jobs,6,TimeUnit.MINUTES);store.setLastRefresh();
