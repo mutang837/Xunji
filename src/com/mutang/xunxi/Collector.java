@@ -11,15 +11,17 @@ import java.time.format.*;
 import java.util.*;
 import java.util.regex.*;
 
-/** Conservative public announcement-list / RSS monitor. No login or script execution. */
+/** Public announcement, blog, micro-post and RSS monitor. No login or script execution. */
 public final class Collector {
     static final int MAX_POSTS = 70;
     static final Pattern DATE = Pattern.compile("(20\\d{2})(?:[-./年]|\\s+)(\\d{1,2})[-./月](\\d{1,2})日?");
+    static final Pattern DATE_TIME = Pattern.compile("(20\\d{2})[-./年](\\d{1,2})[-./月](\\d{1,2})日?\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?");
     static final Pattern ARTICLE = Pattern.compile("(?i)(?:/info/|/content/|/article/|/detail/|/notice/|/news/|/ART/|/art/|/t20\\d{6}_|/20\\d{2}/|/\\d{4,}\\.(?:html?|shtml|aspx)|/\\d{4,}/|_[0-9]{5,}|/[a-z]\\d{5,}\\.html)");
     static final Pattern NAV = Pattern.compile("^(首页|网站首页|学校首页|更多[>»…]*|了解更多|查看详情|上一页|下一页|末页|尾页|返回|登录|注册|联系我们|网站地图|通知公告|招生信息|新闻动态|信息公开|网站导航|列表|新闻|公告|全部|[0-9]+|[.]{3})$");
     public static final class Item {
-        public final String title, url, summary; public final long date;
-        Item(String title,String url,String summary,long date){this.title=title;this.url=url;this.summary=summary;this.date=date;}
+        public final String title, url, summary; public final long date;public final boolean shortPost;
+        Item(String title,String url,String summary,long date){this(title,url,summary,date,false);}
+        Item(String title,String url,String summary,long date,boolean shortPost){this.title=title;this.url=url;this.summary=summary;this.date=date;this.shortPost=shortPost;}
     }
     public static final class Result {
         public final String name; public final List<Item> items; public final List<String> icons;
@@ -49,12 +51,15 @@ public final class Collector {
         String base=response.url().toExternalForm(); String body=decode(response);
         Result result=parse(body,base);
         if(!looksLikeFeed(body)){
+            List<Item> shorts=new ArrayList<>();for(Item i:result.items)if(i.shortPost)shorts.add(i);
+            if(shortArchive(base)&&!shorts.isEmpty())return new Result(result.name,shorts,result.icons);
             Document doc=Jsoup.parse(body,base);
             for(Element a:doc.select("link[rel=alternate][type*=rss], link[rel=alternate][type*=atom]")){
                 String feed=normalize(a.absUrl("href")); if(feed==null)continue;
                 try{Result r=parse(fetch(feed),feed); if(!r.items.isEmpty()){
                     LinkedHashSet<String> icons=new LinkedHashSet<>(result.icons);icons.addAll(r.icons);
-                    return new Result(result.name.isEmpty()?r.name:result.name,r.items,new ArrayList<>(icons));
+                    LinkedHashMap<String,Item> merged=new LinkedHashMap<>();for(Item i:shorts)merged.put(i.url,i);for(Item i:r.items)if(merged.size()<MAX_POSTS)merged.putIfAbsent(i.url,i);
+                    return new Result(result.name.isEmpty()?r.name:result.name,new ArrayList<>(merged.values()),new ArrayList<>(icons));
                 }}catch(Exception ignored){}
                 break;
             }
@@ -62,6 +67,7 @@ public final class Collector {
         return result;
     }
     static boolean looksLikeFeed(String body){return Pattern.compile("(?is)<(?:rss|feed|rdf:RDF)(?:\\s|>)").matcher(body.substring(0,Math.min(body.length(),1500))).find();}
+    static boolean shortArchive(String url){try{String path=URI.create(url).getPath();return Pattern.compile("(?i)(?:^|/)(?:shuoshuo|moments?|microblog|statuses|status|说说|动态)(?:/|$)").matcher(path).find();}catch(Exception e){return false;}}
     public static Result parse(String body,String base){
         if(body.startsWith("\uFEFF"))body=body.substring(1);
         LinkedHashMap<String,Item> items=new LinkedHashMap<>();
@@ -96,10 +102,11 @@ public final class Collector {
         for(Element e:doc.select(".logo img[src], .hd-logo img[src], #logo img[src], img[src*=logo]")){String logo=e.absUrl("src");if(sameSite(host(base),host(logo))){addIcon(icons,base,logo);break;}}
         doc.select("nav, header, footer, script, style, .nav, .navbar, .footer, #footer, #header, .breadcrumb, .pagination, .menu, .topnav").remove();
         String baseHost=host(base); String canonical=normalize(base);
+        collectShorts(doc,base,items);
         for(Element a:doc.select("a[href]")){
             String title=a.attr("title").trim(); if(title.length()<5)title=a.text().trim();
             String url=normalize(a.absUrl("href"));
-            if(url==null || url.equals(canonical) || !sameSite(baseHost,host(url)) || title.length()<7 || title.length()>260 || NAV.matcher(title).matches())continue;
+            if(url==null || items.containsKey(url) || url.equals(canonical) || !sameSite(baseHost,host(url)) || title.length()<7 || title.length()>260 || NAV.matcher(title).matches())continue;
             if(url.matches("(?i).*\\.(?:pdf|docx?|xlsx?|zip|rar|png|jpg|jpeg|gif|css|js)(?:[?].*)?$"))continue;
             long date=0; boolean list=false;
             Element parent=a.parent();
@@ -115,6 +122,23 @@ public final class Collector {
             if(items.size()>=MAX_POSTS)break;
         }
         return new Result(name,new ArrayList<>(items.values()),new ArrayList<>(icons));
+    }
+    static void collectShorts(Document doc,String base,Map<String,Item> out){
+        for(Element card:doc.select("article.shuoshuo-item, .shuoshuo-item, article.format-status, article.format-aside, article.status, article.moment, article.microblog, article[data-post-type=status], .moment-item, .microblog-item")){
+            Element link=card.selectFirst("a.shuoshuo-content-link[href], a.status-link[href], a.moment-link[href], a.microblog-link[href], a[rel=bookmark][href], .entry-title a[href], .post-title a[href], a.permalink[href], h2 a[href], h3 a[href]");
+            if(link==null)continue;String url=normalize(link.absUrl("href"));if(url==null||url.equals(normalize(base))||!sameSite(host(base),host(url)))continue;
+            Element content=card.selectFirst(".shuoshuo-content, .entry-content, .status-content, .moment-content, .microblog-content, .post-content, .entry-summary");
+            String summary=content!=null?content.text().trim():link.text().trim();boolean media=content!=null&&!content.select("img, video, audio, picture").isEmpty();
+            Element heading=card.selectFirst(".shuoshuo-title, .entry-title, .post-title, .status-title, .moment-title, h2, h3");String title=heading==null?"":heading.text().trim();
+            Element time=card.selectFirst("time, .shuoshuo-date, .post-date, .entry-date, .status-date, .moment-date, .published, [itemprop=datePublished]");long date=0;if(time!=null){String raw=time.attr("datetime");if(raw.isEmpty())raw=time.attr("content");if(raw.isEmpty())raw=time.text();date=parseDate(raw);}
+            if(date==0)continue; // Avoid treating menu links and undated profile cards as posts.
+            if(summary.isEmpty()&&media)summary="图片或媒体动态，点击查看原文";
+            if(summary.isEmpty()&&title.isEmpty())continue;
+            if(title.isEmpty())title=summary.length()>24?summary.substring(0,24)+"…":summary;
+            String display="说说 · "+title;if(display.length()>120)display=display.substring(0,120)+"…";
+            if(summary.length()>360)summary=summary.substring(0,360)+"…";
+            out.putIfAbsent(url,new Item(display,url,summary,date,true));if(out.size()>=MAX_POSTS)break;
+        }
     }
     static String siteName(Document doc){
         for(String selector:new String[]{"meta[property=og:site_name]","meta[name=application-name]","meta[name=apple-mobile-web-app-title]","meta[name=SiteName]"}){
@@ -142,6 +166,7 @@ public final class Collector {
         try{return ZonedDateTime.parse(s,DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli();}catch(Exception ignored){}
         try{return Instant.parse(s).toEpochMilli();}catch(Exception ignored){}
         try{return OffsetDateTime.parse(s).toInstant().toEpochMilli();}catch(Exception ignored){}
+        Matcher full=DATE_TIME.matcher(s);if(full.find())try{return LocalDateTime.of(Integer.parseInt(full.group(1)),Integer.parseInt(full.group(2)),Integer.parseInt(full.group(3)),Integer.parseInt(full.group(4)),Integer.parseInt(full.group(5)),full.group(6)==null?0:Integer.parseInt(full.group(6))).atZone(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();}catch(Exception ignored){}
         Matcher m=DATE.matcher(s);if(m.find())try{return LocalDate.of(Integer.parseInt(m.group(1)),Integer.parseInt(m.group(2)),Integer.parseInt(m.group(3))).atStartOfDay(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();}catch(Exception ignored){}
         return 0;
     }

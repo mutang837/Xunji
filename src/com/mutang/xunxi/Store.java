@@ -14,8 +14,8 @@ final class Store {
         JSONObject json(){JSONObject j=new JSONObject();try{j.put("id",id).put("url",url).put("name",name).put("error",error).put("checked",checked).put("initialized",initialized).put("count",count);}catch(JSONException ignored){}return j;}
     }
     static final class Post {
-        String id,source,sourceName,title,url,summary;long date,found;boolean read;
-        Post(JSONObject j){id=j.optString("id");source=j.optString("source");sourceName=j.optString("sourceName");title=j.optString("title");url=j.optString("url");summary=j.optString("summary");date=j.optLong("date");found=j.optLong("found");read=j.optBoolean("read");}
+        String id,source,sourceName,title,url,summary;long date,found;boolean read,shortPost;
+        Post(JSONObject j){id=j.optString("id");source=j.optString("source");sourceName=j.optString("sourceName");title=j.optString("title");url=j.optString("url");summary=j.optString("summary");date=j.optLong("date");found=j.optLong("found");read=j.optBoolean("read");shortPost=j.optBoolean("shortPost");}
         long order(){return date>0?date:found;}
     }
     final SharedPreferences prefs;
@@ -44,10 +44,12 @@ final class Store {
                 JSONArray old=seenAll.optJSONArray(src.id);if(old==null)old=new JSONArray();
                 LinkedHashSet<String> seen=new LinkedHashSet<>();for(int j=0;j<old.length();j++)seen.add(old.optString(j));
                 // Existing displayed articles also prevent duplicates after old seen entries expire.
-                for(int j=0;j<posts.length();j++){JSONObject p=posts.optJSONObject(j);if(src.id.equals(p.optString("source")))seen.add(p.optString("url"));}
+                Map<String,JSONObject> storedPosts=new HashMap<>();for(int j=0;j<posts.length();j++){JSONObject p=posts.optJSONObject(j);if(src.id.equals(p.optString("source"))){seen.add(p.optString("url"));storedPosts.put(p.optString("url"),p);}}
                 long now=System.currentTimeMillis();int offset=0;
-                for(Collector.Item item:result.items){if(!seen.add(item.url))continue;
-                    JSONObject p=new JSONObject();p.put("id",UUID.randomUUID().toString()).put("source",src.id).put("sourceName",s.optString("name")).put("title",item.title).put("url",item.url).put("summary",item.summary).put("date",item.date).put("found",now-offset++).put("read",false);posts.put(p);if(initialized)fresh.add(new Post(p));}
+                boolean shortInitialized=s.optBoolean("shortPostsInitialized"),foundShorts=false;
+                for(Collector.Item item:result.items){if(item.shortPost)foundShorts=true;if(!seen.add(item.url)){JSONObject oldPost=storedPosts.get(item.url);if(item.shortPost&&oldPost!=null)oldPost.put("title",item.title).put("summary",item.summary).put("date",item.date).put("shortPost",true);continue;}
+                    JSONObject p=new JSONObject();p.put("id",UUID.randomUUID().toString()).put("source",src.id).put("sourceName",s.optString("name")).put("title",item.title).put("url",item.url).put("summary",item.summary).put("date",item.date).put("found",now-offset++).put("read",false).put("shortPost",item.shortPost);posts.put(p);if(initialized&&(!item.shortPost||shortInitialized))fresh.add(new Post(p));}
+                if(foundShorts)s.put("shortPostsInitialized",true);
                 JSONArray updated=new JSONArray();List<String> list=new ArrayList<>(seen);for(int j=Math.max(0,list.size()-3000);j<list.size();j++)updated.put(list.get(j));seenAll.put(src.id,updated);o.put("seen",seenAll);
                 s.put("initialized",true).put("count",result.items.size());
             }
