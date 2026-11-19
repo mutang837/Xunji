@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
         TextView title=text(main,chosen!=null&&tab==0?22:29,TEXT,true);title.setMaxLines(1);title.setEllipsize(android.text.TextUtils.TruncateAt.END);add(titleBox,title);gap(titleBox,5);
         String sub=tab==0?(chosen==null?"你的个人信息流":"单个来源 · "+Collector.host(chosen.url)):tab==1?"管理你关注的来源":"个性化与同步";
         TextView st=text(sub,12,MUTED,false);st.setSingleLine(true);st.setEllipsize(android.text.TextUtils.TruncateAt.END);add(titleBox,st);titleRow.addView(titleBox,new LinearLayout.LayoutParams(0,-2,1));
-        if(tab==0){View refresh=iconAction("refresh",lastRunning?"正在更新":"检查更新",false,()->refresh(selectedSource));titleRow.addView(refresh,new LinearLayout.LayoutParams(d(46),d(46)));if(lastRunning)refresh.setAlpha(.55f);}
+        if(tab==0){View search=iconAction("search","搜索已收录信息",false,()->startActivity(new Intent(this,SearchActivity.class).putExtra("source",selectedSource)));LinearLayout.LayoutParams searchLp=new LinearLayout.LayoutParams(d(46),d(46));searchLp.setMargins(d(6),0,d(7),0);titleRow.addView(search,searchLp);View refresh=iconAction("refresh",lastRunning?"正在更新":"检查更新",false,()->refresh(selectedSource));titleRow.addView(refresh,new LinearLayout.LayoutParams(d(46),d(46)));if(lastRunning)refresh.setAlpha(.55f);}
         if(tab==1)titleRow.addView(iconAction("add","添加网站",true,()->addSource()),new LinearLayout.LayoutParams(d(46),d(46)));add(top,titleRow);
         if(tab==0)feed();else if(tab==1)sources();else settings();
         String[] labels={"首页","订阅","设置"},glyphs={"feed","bookmark","settings"};for(int i=0;i<3;i++){final int target=i;View item=navItem(glyphs[i],labels[i],tab==i,()->{tab=target;render(false);});nav.addView(item,new LinearLayout.LayoutParams(0,-2,1));}

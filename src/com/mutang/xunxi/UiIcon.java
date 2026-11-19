@@ -20,6 +20,7 @@ final class UiIcon extends View {
             case "menu":canvas.drawLine(4,7,20,7,p);canvas.drawLine(4,12,17,12,p);canvas.drawLine(4,17,13,17,p);break;
             case "refresh":
                 canvas.drawArc(4,4,20,20,30,300,false,p);canvas.drawLine(20,4,20,10,p);canvas.drawLine(20,10,14,10,p);break;
+            case "search":canvas.drawCircle(10.5f,10.5f,6.5f,p);canvas.drawLine(15.5f,15.5f,20,20,p);break;
             case "add":canvas.drawLine(12,5,12,19,p);canvas.drawLine(5,12,19,12,p);break;
             case "back":canvas.drawLine(14.5f,5,7.5f,12,p);canvas.drawLine(7.5f,12,14.5f,19,p);break;
             case "next":canvas.drawLine(9,6,15,12,p);canvas.drawLine(15,12,9,18,p);break;
